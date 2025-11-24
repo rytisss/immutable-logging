@@ -1,1 +1,112 @@
-# immutable-logging
+# immutable-logging for Python
+
+This project demonstrates a **production-ready, immutable logging system** using [immudb](https://immudb.io/), an open-source cryptographically verifiable database. Logs are stored in an append-only, tamper-evident database while optionally also being written to local files. This ensures **full auditability, traceability, and integrity** of all application events.
+
+---
+
+## Features
+
+- **Immutable Logging**: All log entries are stored in immudb with cryptographic verification.
+- **Native Python Logging Levels**: Supports `DEBUG`, `INFO`, `WARNING`, `ERROR`, and `CRITICAL`.
+- **Exception Logging**: Automatically captures exceptions and tracebacks.
+- **Dual Output**: Logs can be stored in immudb **and** written to a rotating file for easy inspection.
+- **Thread-Safe & Non-blocking**: Uses a queue and background worker to prevent application slowdowns.
+- **Docker-Ready**: Includes a Docker Compose setup for running immudb and your application together.
+- **Pretty-Printed Output**: Human-readable display of immudb log entries.
+
+---
+
+## How It Works
+
+1. Log messages are generated using Python’s standard logging module.
+2. Each log record is serialized with metadata, including:
+   - Timestamp
+   - Logger name
+   - File and line number
+   - Function name
+   - Log level
+3. Records are sent to immudb, where:
+   - Each write is **append-only**.
+   - Updates create new versions while preserving the full historical record.
+   - Cryptographic proofs ensure tamper-evidence.
+4. Optionally, logs are also written to a local file using a rotating file handler.
+
+---
+
+## Benefits
+
+- **Auditability**: Every event can be independently verified.
+- **Traceability**: Complete history of changes is preserved.
+- **Compliance**: Suitable for systems requiring strict data integrity standards.
+- **Flexible**: Language-agnostic logging pattern; applications only need to append events.
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Docker & Docker Compose
+- Python 3.11+
+- pip
+
+### Run immudb with Docker and expose a few ports for the communication:  
+
+```bash
+docker run -d -p 3322:3322 -p 8080:8080 -it --rm --name immudb codenotary/immudb:latest
+```
+
+### Install requirements  
+
+```bash
+pip install -r requirements.txt
+```
+
+### Run the application
+```bash
+python main.py
+```
+
+## Log sinks
+- Logs are stored in immudb:
+```bash
+--- Latest immudb logs ---
+[2025-11-24 20:33:42.536] DEBUG    Debug details for developers
+    Logger: CVDLINK test logger
+    File:   main.py:12
+    Func:   main
+    Key:    log:1764009222536:DEBUG
+
+[2025-11-24 20:33:42.784] INFO     Service started
+    Logger: CVDLINK test logger
+    File:   main.py:13
+    Func:   main
+    Key:    log:1764009222784:INFO
+
+[2025-11-24 20:33:43.092] WARNING  Memory usage near threshold
+    Logger: CVDLINK test logger
+    File:   main.py:14
+    Func:   main
+    Key:    log:1764009223092:WARNING
+
+[2025-11-24 20:33:43.317] ERROR    Database connection timeout
+    Logger: CVDLINK test logger
+    File:   main.py:15
+    Func:   main
+    Key:    log:1764009223317:ERROR
+
+[2025-11-24 20:33:43.551] CRITICAL System failure
+    Logger: CVDLINK test logger
+    File:   main.py:16
+    Func:   main
+    Key:    log:1764009223551:CRITICAL
+
+```
+- Rotating file logs are saved to **cvdlink.log**
+```bash
+2025-11-24 20:47:45,064 [DEBUG] CVDLINK test logger (main.py:37): Debug details for developers
+2025-11-24 20:47:45,066 [INFO] CVDLINK test logger (main.py:38): Service started
+2025-11-24 20:47:45,066 [WARNING] CVDLINK test logger (main.py:39): Memory usage near threshold
+2025-11-24 20:47:45,066 [ERROR] CVDLINK test logger (main.py:40): Database connection timeout
+2025-11-24 20:47:45,066 [CRITICAL] CVDLINK test logger (main.py:41): System failure
+```
