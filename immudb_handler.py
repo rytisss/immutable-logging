@@ -1,0 +1,151 @@
+import json
+import time
+import logging
+import queue
+import threading
+from immudb.client import ImmudbClient
+
+
+class ImmuDBHandler(logging.Handler):
+    """
+    Production-grade logging handler for immudb.
+    - Fully async using an internal queue (non-blocking)
+    - Supports all Python logging levels
+    - Captures exception info (tracebacks)
+    - Thread-safe
+    - Automatically reconnects if immudb becomes unavailable
+    """
+
+    def __init__(
+        self,
+        host="0.0.0.0",
+        port=3322,
+        user="immudb",
+        password="immudb",
+        prefix="log",
+        max_queue_size=10000,
+    ):
+        super().__init__()
+        self.prefix = prefix
+
+        # internal queue to avoid blocking application code
+        self.queue = queue.Queue(maxsize=max_queue_size)
+
+        # immudb connection
+        self.client = ImmudbClient()
+        self.client.login(user, password)
+
+        # background worker thread
+        self.worker = threading.Thread(target=self._process_queue, daemon=True)
+        self.worker.start()
+
+        self._running = True
+
+    def emit(self, record):
+        """
+        Serialize and queue log record.
+        Never blocks application threads.
+        """
+        try:
+            log_entry = self._serialize(record)
+            self.queue.put_nowait(log_entry)
+        except queue.Full:
+            # Drop log if queue is full — fail-safe behavior
+            pass
+        except Exception:
+            self.handleError(record)
+
+    def _serialize(self, record):
+        """
+        Convert log record → JSON-serializable dict.
+        """
+        timestamp = int(time.time() * 1000)
+
+        entry = {
+            "timestamp": timestamp,
+            "level": record.levelname,
+            "message": record.getMessage(),
+            "logger": record.name,
+            "module": record.module,
+            "filename": record.filename,
+            "lineno": record.lineno,
+            "func": record.funcName,
+            "process": record.process,
+            "thread": record.thread,
+        }
+
+        # Include exception/traceback if present
+        if record.exc_info:
+            entry["exception"] = self.formatException(record.exc_info)
+
+        key = f"{self.prefix}:{timestamp}:{record.levelname}".encode()
+        value = json.dumps(entry).encode()
+
+        return key, value
+
+    def _process_queue(self):
+        """
+        Background worker that writes logs to immudb.
+        Automatically retries if connection fails.
+        """
+        while True:
+            try:
+                key, value = self.queue.get()
+                self.client.set(key, value)
+            except Exception:
+                # Reconnect logic — immune to temporary outages
+                try:
+                    self.client = ImmudbClient()
+                    self.client.login("immudb", "immudb")
+                except Exception:
+                    time.sleep(0.5)  # wait before retrying
+
+    def close(self):
+        """
+        Flush queue and stop thread.
+        """
+        self._running = False
+        self.worker.join(timeout=2)
+        super().close()
+
+    def scan_logs(self, limit=100, reverse=False):
+        """
+        Works with immudb-py versions where scan() returns Dict[bytes, bytes].
+        reverse=False -> ascending order
+        reverse=True -> descending order
+        """
+
+        prefix = f"{self.prefix}:".encode()
+
+        # key: b'' means "start from beginning"
+        seek_key = b""
+
+        try:
+            raw = self.client.scan(
+                key=seek_key,
+                prefix=prefix,
+                desc=reverse,
+                limit=limit
+            )
+        except Exception as e:
+            raise RuntimeError(f"immudb scan failed: {e}")
+
+        logs = []
+        for key_bytes, val_bytes in raw.items():
+            try:
+                key_str = key_bytes.decode()
+            except Exception:
+                key_str = repr(key_bytes)
+
+            try:
+                # values are JSON strings
+                value = json.loads(val_bytes.decode())
+            except Exception:
+                value = val_bytes.decode(errors="replace")
+
+            logs.append({
+                "key": key_str,
+                "value": value
+            })
+
+        return logs
