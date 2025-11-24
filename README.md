@@ -2,6 +2,11 @@
 
 This project demonstrates a **production-ready, immutable logging system** using [immudb](https://immudb.io/), an open-source cryptographically verifiable database. Logs are stored in an append-only, tamper-evident database while optionally also being written to local files. This ensures **full auditability, traceability, and integrity** of all application events.
 
+<p align="center">
+  <img width="585" height="215" alt="image" src="https://github.com/user-attachments/assets/a43ce8e2-28fd-4aa9-ae6c-f6972e4cb767" />
+</p>
+
+
 ---
 
 ## Features
@@ -102,7 +107,7 @@ python main.py
     Key:    log:1764009223551:CRITICAL
 
 ```
-- Rotating file logs are saved to **cvdlink.log**
+- Rotating file logs are saved to **cvdlink.log**:
 ```bash
 2025-11-24 20:47:45,064 [DEBUG] CVDLINK test logger (main.py:37): Debug details for developers
 2025-11-24 20:47:45,066 [INFO] CVDLINK test logger (main.py:38): Service started
@@ -110,3 +115,6 @@ python main.py
 2025-11-24 20:47:45,066 [ERROR] CVDLINK test logger (main.py:40): Database connection timeout
 2025-11-24 20:47:45,066 [CRITICAL] CVDLINK test logger (main.py:41): System failure
 ```
+
+## TODOs & resources worth reading:  
+[Tampering detection using **The Auditor**](https://docs.immudb.io/master/production/auditor.html#running-an-auditor-with-immuclient)
