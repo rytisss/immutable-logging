@@ -76,7 +76,6 @@ python main.py
 - Logs are stored in immudb:
 ```bash
 --- Latest immudb logs ---
---- Latest immudb logs ---
 [2026-03-31 11:05:55.026] DEBUG    Debug details for developers
     Logger: CVDLINK test logger
     File:   main.py:50
@@ -116,11 +115,17 @@ python main.py
 ```
 - Rotating file logs are saved to **cvdlink.log**:
 ```bash
-2025-11-24 20:47:45,064 [DEBUG] CVDLINK test logger (main.py:37): Debug details for developers
-2025-11-24 20:47:45,066 [INFO] CVDLINK test logger (main.py:38): Service started
-2025-11-24 20:47:45,066 [WARNING] CVDLINK test logger (main.py:39): Memory usage near threshold
-2025-11-24 20:47:45,066 [ERROR] CVDLINK test logger (main.py:40): Database connection timeout
-2025-11-24 20:47:45,066 [CRITICAL] CVDLINK test logger (main.py:41): System failure
+2026-03-31 11:11:08,615 [DEBUG] CVDLINK test logger (main.py:50): Debug details for developers
+2026-03-31 11:11:08,616 [INFO] CVDLINK test logger (main.py:51): Service started
+2026-03-31 11:11:08,616 [WARNING] CVDLINK test logger (main.py:52): Memory usage near threshold
+2026-03-31 11:11:08,616 [ERROR] CVDLINK test logger (main.py:53): Database connection timeout
+2026-03-31 11:11:08,616 [CRITICAL] CVDLINK test logger (main.py:54): System failure
+2026-03-31 11:11:08,616 [ERROR] CVDLINK test logger (main.py:60): Unhandled exception occurred
+Traceback (most recent call last):
+  File "c:\src\Projects\immutable_logging\main.py", line 58, in main
+    1 / 0
+    ~~^~~
+ZeroDivisionError: division by zero
 ```
 
 ## TODOs & resources worth reading:  
