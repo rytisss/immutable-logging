@@ -76,7 +76,8 @@ class ImmuDBHandler(logging.Handler):
 
         # Include exception/traceback if present
         if record.exc_info:
-            entry["exception"] = self.formatException(record.exc_info)
+            formatter = self.formatter or logging.Formatter()
+            entry["exception"] = formatter.formatException(record.exc_info)
 
         key = f"{self.prefix}:{timestamp}:{record.levelname}".encode()
         value = json.dumps(entry).encode()

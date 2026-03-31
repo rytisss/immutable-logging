@@ -62,7 +62,7 @@ def main():
     # Fetch logs from immudb
     handler = logger.handlers[0]  # immudb handler
     print("\n--- Latest immudb logs ---")
-    for log in handler.scan_logs(limit=5):
+    for log in handler.scan_logs(limit=6):
         print_log(log)
 
 if __name__ == "__main__":
