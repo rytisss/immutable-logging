@@ -76,35 +76,42 @@ python main.py
 - Logs are stored in immudb:
 ```bash
 --- Latest immudb logs ---
-[2025-11-24 20:33:42.536] DEBUG    Debug details for developers
+--- Latest immudb logs ---
+[2026-03-31 11:05:55.026] DEBUG    Debug details for developers
     Logger: CVDLINK test logger
-    File:   main.py:12
+    File:   main.py:50
     Func:   main
-    Key:    log:1764009222536:DEBUG
+    Key:    log:1774944355026:DEBUG
 
-[2025-11-24 20:33:42.784] INFO     Service started
+[2026-03-31 11:05:55.027] CRITICAL System failure
     Logger: CVDLINK test logger
-    File:   main.py:13
+    File:   main.py:54
     Func:   main
-    Key:    log:1764009222784:INFO
+    Key:    log:1774944355027:CRITICAL
 
-[2025-11-24 20:33:43.092] WARNING  Memory usage near threshold
+[2026-03-31 11:05:55.027] ERROR    Database connection timeout
     Logger: CVDLINK test logger
-    File:   main.py:14
+    File:   main.py:53
     Func:   main
-    Key:    log:1764009223092:WARNING
+    Key:    log:1774944355027:ERROR
 
-[2025-11-24 20:33:43.317] ERROR    Database connection timeout
+[2026-03-31 11:05:55.027] INFO     Service started
     Logger: CVDLINK test logger
-    File:   main.py:15
+    File:   main.py:51
     Func:   main
-    Key:    log:1764009223317:ERROR
+    Key:    log:1774944355027:INFO
 
-[2025-11-24 20:33:43.551] CRITICAL System failure
+[2026-03-31 11:05:55.027] WARNING  Memory usage near threshold
     Logger: CVDLINK test logger
-    File:   main.py:16
+    File:   main.py:52
     Func:   main
-    Key:    log:1764009223551:CRITICAL
+    Key:    log:1774944355027:WARNING
+
+[2026-03-31 11:05:55.028] ERROR    Unhandled exception occurred
+    Logger: CVDLINK test logger
+    File:   main.py:60
+    Func:   main
+    Key:    log:1774944355028:ERROR
 
 ```
 - Rotating file logs are saved to **cvdlink.log**:
