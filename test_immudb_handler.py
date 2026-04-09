@@ -36,6 +36,17 @@ class TestImmuDBHandlerInit(unittest.TestCase):
             ImmuDBHandler(user="admin", password="secret")
             mock_client.login.assert_called_once_with("admin", "secret")
 
+    def test_connected_true_on_success(self):
+        handler, _ = make_handler()
+        self.assertTrue(handler.connected)
+
+    def test_connected_false_on_login_failure(self):
+        with patch("immudb_handler.ImmudbClient") as MockClient:
+            mock_client = MockClient.return_value
+            mock_client.login.side_effect = Exception("Connection refused")
+            handler = ImmuDBHandler()
+            self.assertFalse(handler.connected)
+
 
 class TestSerialize(unittest.TestCase):
     def setUp(self):
@@ -145,6 +156,13 @@ class TestEmit(unittest.TestCase):
         entry = self.handler.queue.get_nowait()
         self.assertIsInstance(entry, tuple)
         self.assertEqual(len(entry), 2)
+
+    def test_emit_skips_queue_when_disconnected(self):
+        handler, _ = make_handler()
+        handler.connected = False
+        record = self._make_record()
+        handler.emit(record)
+        self.assertTrue(handler.queue.empty())
 
 
 class TestProcessQueue(unittest.TestCase):
