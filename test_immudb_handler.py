@@ -1,6 +1,9 @@
 import json
 import logging
+import os
 import queue
+import shutil
+import tempfile
 import time
 import unittest
 from io import StringIO
@@ -35,6 +38,17 @@ class TestImmuDBHandlerInit(unittest.TestCase):
             mock_client = MockClient.return_value
             ImmuDBHandler(user="admin", password="secret")
             mock_client.login.assert_called_once_with("admin", "secret")
+
+    def test_connected_true_on_success(self):
+        handler, _ = make_handler()
+        self.assertTrue(handler.connected)
+
+    def test_connected_false_on_login_failure(self):
+        with patch("immudb_handler.ImmudbClient") as MockClient:
+            mock_client = MockClient.return_value
+            mock_client.login.side_effect = Exception("Connection refused")
+            handler = ImmuDBHandler()
+            self.assertFalse(handler.connected)
 
 
 class TestSerialize(unittest.TestCase):
@@ -146,6 +160,13 @@ class TestEmit(unittest.TestCase):
         self.assertIsInstance(entry, tuple)
         self.assertEqual(len(entry), 2)
 
+    def test_emit_skips_queue_when_disconnected(self):
+        handler, _ = make_handler()
+        handler.connected = False
+        record = self._make_record()
+        handler.emit(record)
+        self.assertTrue(handler.queue.empty())
+
 
 class TestProcessQueue(unittest.TestCase):
     def test_worker_calls_client_set(self):
@@ -238,6 +259,29 @@ class TestScanLogs(unittest.TestCase):
         self.assertEqual(logs, [])
 
 
+class TestReconnection(unittest.TestCase):
+    def test_reconnects_after_interval(self):
+        with patch("immudb_handler.ImmudbClient") as MockClient:
+            mock_client = MockClient.return_value
+            # First login fails (init), second succeeds (reconnect)
+            mock_client.login.side_effect = [Exception("refused"), None]
+            handler = ImmuDBHandler(reconnect_interval=0.1)
+            self.assertFalse(handler.connected)
+            # Wait for reconnection attempt
+            time.sleep(0.3)
+            self.assertTrue(handler.connected)
+
+    def test_no_reconnect_before_interval(self):
+        with patch("immudb_handler.ImmudbClient") as MockClient:
+            mock_client = MockClient.return_value
+            mock_client.login.side_effect = [Exception("refused"), None]
+            handler = ImmuDBHandler(reconnect_interval=10)
+            self.assertFalse(handler.connected)
+            time.sleep(0.2)
+            # Should still be disconnected — interval hasn't elapsed
+            self.assertFalse(handler.connected)
+
+
 class TestClose(unittest.TestCase):
     def test_close_sets_running_false(self):
         handler, _ = make_handler()
@@ -309,6 +353,44 @@ class TestPrintLog(unittest.TestCase):
         output = self._capture_print_log(entry)
         expected_ts = datetime.fromtimestamp(ts_ms / 1000).strftime("%Y-%m-%d %H:%M:%S")
         self.assertIn(expected_ts, output)
+
+
+class TestStartupVerification(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_startup_check_logs_info_on_clean(self):
+        from verify_logs import verify_log_integrity
+        # Create an empty log — should pass
+        log_path = os.path.join(self.tmpdir, "test.log")
+        integrity_path = log_path + ".integrity"
+        open(log_path, "w").close()
+        open(integrity_path, "w").close()
+        result = verify_log_integrity(log_path)
+        self.assertTrue(result.passed)
+
+    def test_startup_check_detects_tampered(self):
+        from verify_logs import verify_log_integrity
+        import hashlib
+
+        log_path = os.path.join(self.tmpdir, "test.log")
+        integrity_path = log_path + ".integrity"
+
+        with open(log_path, "w") as f:
+            f.write("tampered line\n")
+
+        genesis = "0" * 64
+        original_hash = hashlib.sha256(
+            ("original line" + genesis).encode()
+        ).hexdigest()
+        with open(integrity_path, "w") as f:
+            f.write(f"1|sha256={original_hash}|prev={genesis}\n")
+
+        result = verify_log_integrity(log_path)
+        self.assertFalse(result.passed)
 
 
 if __name__ == "__main__":

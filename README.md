@@ -18,6 +18,9 @@ This project demonstrates a **production-ready, immutable logging system** using
 - **Thread-Safe & Non-blocking**: Uses a queue and background worker to prevent application slowdowns.
 - **Docker-Ready**: Includes a Docker Compose setup for running immudb and your application together.
 - **Pretty-Printed Output**: Human-readable display of immudb log entries.
+- **Tamper-Proof File Logs**: SHA-256 hash chain written to a `.integrity` sidecar file detects modifications, deletions, and insertions.
+- **Graceful immudb Fallback**: Works without immudb — falls back to file + console logging, retries connection every 30 seconds.
+- **Log Integrity Verification**: CLI tool and startup check to verify log file integrity.
 
 ---
 
@@ -35,6 +38,7 @@ This project demonstrates a **production-ready, immutable logging system** using
    - Updates create new versions while preserving the full historical record.
    - Cryptographic proofs ensure tamper-evidence.
 4. Optionally, logs are also written to a local file using a rotating file handler.
+5. A SHA-256 hash chain is written to a `.integrity` sidecar file. Each entry's hash covers its full content plus the previous hash, forming a tamper-evident chain that can be independently verified.
 
 ---
 
@@ -133,12 +137,69 @@ ZeroDivisionError: division by zero
 The test suite uses only the standard library (`unittest`) and mocks the immudb client, so **no running immudb instance is required**.
 
 ```bash
-python -m unittest test_immudb_handler -v
+python -m pytest test_immudb_handler.py test_integrity_handler.py test_verify_logs.py -v
 ```
 
-29 tests cover `ImmuDBHandler` initialisation, serialisation, emit/queue behaviour, background worker reconnect logic, `scan_logs` parsing, and the `print_log` helper.
-
 ---
+
+## Tamper-Proof Logging
+
+Each log entry's full content (timestamp, level, logger, file, line, message) is hashed with SHA-256 and chained to the previous entry's hash — similar to how Git links commits. The hash chain is stored in a sidecar `.integrity` file alongside the main log.
+
+**`cvdlink.log`** stays human-readable and unchanged:
+```bash
+2026-04-09 10:00:01,123 [INFO] CVDLINK test logger (main.py:51): Service started
+2026-04-09 10:00:01,124 [DEBUG] CVDLINK test logger (main.py:50): Debug details
+```
+
+**`cvdlink.log.integrity`** stores the hash chain:
+```bash
+1|sha256=a3f2b8c1...|prev=0000000000000000000000000000000000000000000000000000000000000000
+2|sha256=7e1d4af2...|prev=a3f2b8c1...
+```
+
+If anyone modifies, deletes, or inserts a log entry, the chain breaks and verification catches it.
+
+## Verifying Log Integrity
+
+### CLI verification
+```bash
+python verify_logs.py cvdlink.log
+```
+
+**Clean output:**
+```bash
+Verifying cvdlink.log...
+Line 1: OK
+Line 2: OK
+Line 3: OK
+
+Result: PASSED — all entries verified
+```
+
+**Tampered output:**
+```bash
+Verifying cvdlink.log...
+Line 1: OK
+Line 2: TAMPERED
+Line 3: OK
+
+Result: FAILED — 1 tampered, 0 missing entries
+```
+
+### Startup verification
+The application automatically checks log integrity on startup and logs the result:
+```bash
+2026-04-09 10:00:00,000 [INFO] CVDLINK test logger: Log integrity check passed.
+```
+
+## Graceful immudb Fallback
+
+The system works without immudb running. If immudb is unreachable:
+1. A warning is printed: `immudb connection failed: <reason>. Falling back to file-only logging.`
+2. Logs continue to file (`cvdlink.log`), integrity sidecar (`.integrity`), and console (stderr).
+3. A background thread retries the connection every 30 seconds.
+4. When immudb becomes available, logging resumes to immudb automatically.
 
 ## TODOs & resources worth reading:  
 [Tampering detection using **The Auditor**](https://docs.immudb.io/master/production/auditor.html#running-an-auditor-with-immuclient)

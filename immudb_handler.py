@@ -24,28 +24,53 @@ class ImmuDBHandler(logging.Handler):
         password="immudb",
         prefix="log",
         max_queue_size=10000,
+        reconnect_interval=30,
     ):
         super().__init__()
         self.prefix = prefix
+        self.host = host
+        self.port = port
+        self.user = user
+        self.password = password
+        self.reconnect_interval = reconnect_interval
 
         # internal queue to avoid blocking application code
         self.queue = queue.Queue(maxsize=max_queue_size)
 
         # immudb connection
-        self.client = ImmudbClient()
-        self.client.login(user, password)
+        self.connected = False
+        self.client = None
+        self._try_connect()
 
         # background worker thread
+        self._running = True
+        self._last_reconnect_attempt = time.time()
         self.worker = threading.Thread(target=self._process_queue, daemon=True)
         self.worker.start()
 
-        self._running = True
+    def _try_connect(self):
+        """Attempt to connect to immudb. Sets self.connected on result."""
+        try:
+            self.client = ImmudbClient(f"{self.host}:{self.port}")
+            self.client.login(self.user, self.password)
+            self.connected = True
+        except Exception as e:
+            self.connected = False
+            self.client = None
+            import sys
+            print(
+                f"immudb connection failed: {e}. Falling back to file-only logging.",
+                file=sys.stderr,
+            )
 
     def emit(self, record):
         """
         Serialize and queue log record.
         Never blocks application threads.
+        Skips silently if not connected to immudb.
         """
+        if not self.connected:
+            return
         try:
             log_entry = self._serialize(record)
             self.queue.put_nowait(log_entry)
@@ -87,19 +112,30 @@ class ImmuDBHandler(logging.Handler):
     def _process_queue(self):
         """
         Background worker that writes logs to immudb.
-        Automatically retries if connection fails.
+        Periodically attempts to reconnect if disconnected.
         """
-        while True:
+        while self._running:
+            # If disconnected, try to reconnect at the configured interval
+            if not self.connected:
+                now = time.time()
+                if now - self._last_reconnect_attempt >= self.reconnect_interval:
+                    self._last_reconnect_attempt = now
+                    self._try_connect()
+                    if self.connected:
+                        import sys
+                        print("immudb connection re-established.", file=sys.stderr)
+                time.sleep(0.1)
+                continue
+
             try:
-                key, value = self.queue.get()
+                key, value = self.queue.get(timeout=0.1)
                 self.client.set(key, value)
+            except queue.Empty:
+                continue
             except Exception:
-                # Reconnect logic — immune to temporary outages
-                try:
-                    self.client = ImmudbClient()
-                    self.client.login("immudb", "immudb")
-                except Exception:
-                    time.sleep(0.5)  # wait before retrying
+                self.connected = False
+                # Set last attempt to 0 so reconnect is tried immediately
+                self._last_reconnect_attempt = 0
 
     def close(self):
         """
