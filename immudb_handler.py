@@ -24,28 +24,53 @@ class ImmuDBHandler(logging.Handler):
         password="immudb",
         prefix="log",
         max_queue_size=10000,
+        reconnect_interval=30,
     ):
         super().__init__()
         self.prefix = prefix
+        self.host = host
+        self.port = port
+        self.user = user
+        self.password = password
+        self.reconnect_interval = reconnect_interval
 
         # internal queue to avoid blocking application code
         self.queue = queue.Queue(maxsize=max_queue_size)
 
         # immudb connection
-        self.client = ImmudbClient()
-        self.client.login(user, password)
+        self.connected = False
+        self.client = None
+        self._try_connect()
 
         # background worker thread
+        self._running = True
+        self._last_reconnect_attempt = time.time()
         self.worker = threading.Thread(target=self._process_queue, daemon=True)
         self.worker.start()
 
-        self._running = True
+    def _try_connect(self):
+        """Attempt to connect to immudb. Sets self.connected on result."""
+        try:
+            self.client = ImmudbClient()
+            self.client.login(self.user, self.password)
+            self.connected = True
+        except Exception as e:
+            self.connected = False
+            self.client = None
+            import sys
+            print(
+                f"immudb connection failed: {e}. Falling back to file-only logging.",
+                file=sys.stderr,
+            )
 
     def emit(self, record):
         """
         Serialize and queue log record.
         Never blocks application threads.
+        Skips silently if not connected to immudb.
         """
+        if not self.connected:
+            return
         try:
             log_entry = self._serialize(record)
             self.queue.put_nowait(log_entry)
