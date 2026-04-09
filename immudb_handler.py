@@ -51,7 +51,7 @@ class ImmuDBHandler(logging.Handler):
     def _try_connect(self):
         """Attempt to connect to immudb. Sets self.connected on result."""
         try:
-            self.client = ImmudbClient()
+            self.client = ImmudbClient(f"{self.host}:{self.port}")
             self.client.login(self.user, self.password)
             self.connected = True
         except Exception as e:

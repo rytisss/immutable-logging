@@ -8,6 +8,10 @@ class IntegrityHandler(logging.Handler):
     """
     Logging handler that writes a SHA-256 hash chain sidecar file.
     Each entry links to the previous via its hash, forming a tamper-evident chain.
+
+    Thread safety: emit() is called by Handler.handle() which acquires self.lock
+    before calling emit(), so concurrent access to _prev_hash and _line_num is safe
+    under normal logging usage.
     """
 
     def __init__(self, integrity_path):

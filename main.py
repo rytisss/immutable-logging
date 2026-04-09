@@ -8,6 +8,20 @@ from verify_logs import verify_log_integrity
 
 LOG_FILE = "cvdlink.log"
 
+
+class IntegrityAwareRotatingHandler(RotatingFileHandler):
+    """RotatingFileHandler that resets the integrity hash chain on rotation."""
+
+    def __init__(self, *args, integrity_handler=None, **kwargs):
+        self._integrity_handler = integrity_handler
+        super().__init__(*args, **kwargs)
+
+    def doRollover(self):
+        super().doRollover()
+        if self._integrity_handler:
+            self._integrity_handler.reset_chain()
+
+
 # Configure logger
 logger = logging.getLogger('CVDLINK test logger')
 logger.setLevel(logging.DEBUG)
@@ -24,24 +38,25 @@ immu_handler = ImmuDBHandler()
 logger.addHandler(immu_handler)
 
 # -------------------------
-# file handler (local logs)
-# -------------------------
-file_handler = RotatingFileHandler(
-    LOG_FILE,
-    maxBytes=10_000_000,
-    backupCount=5
-)
-file_handler.setLevel(logging.DEBUG)
-file_handler.setFormatter(file_formatter)
-logger.addHandler(file_handler)
-
-# -------------------------
 # integrity handler (SHA-256 hash chain sidecar)
 # -------------------------
 integrity_handler = IntegrityHandler(LOG_FILE + ".integrity")
 integrity_handler.setLevel(logging.DEBUG)
 integrity_handler.setFormatter(file_formatter)
 logger.addHandler(integrity_handler)
+
+# -------------------------
+# file handler (local logs, resets integrity chain on rotation)
+# -------------------------
+file_handler = IntegrityAwareRotatingHandler(
+    LOG_FILE,
+    maxBytes=10_000_000,
+    backupCount=5,
+    integrity_handler=integrity_handler,
+)
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(file_formatter)
+logger.addHandler(file_handler)
 
 # -------------------------
 # console handler (stderr fallback)
