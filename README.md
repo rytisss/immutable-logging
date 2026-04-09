@@ -128,5 +128,17 @@ Traceback (most recent call last):
 ZeroDivisionError: division by zero
 ```
 
+## Running Tests
+
+The test suite uses only the standard library (`unittest`) and mocks the immudb client, so **no running immudb instance is required**.
+
+```bash
+python -m unittest test_immudb_handler -v
+```
+
+29 tests cover `ImmuDBHandler` initialisation, serialisation, emit/queue behaviour, background worker reconnect logic, `scan_logs` parsing, and the `print_log` helper.
+
+---
+
 ## TODOs & resources worth reading:  
 [Tampering detection using **The Auditor**](https://docs.immudb.io/master/production/auditor.html#running-an-auditor-with-immuclient)
