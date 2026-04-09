@@ -256,6 +256,29 @@ class TestScanLogs(unittest.TestCase):
         self.assertEqual(logs, [])
 
 
+class TestReconnection(unittest.TestCase):
+    def test_reconnects_after_interval(self):
+        with patch("immudb_handler.ImmudbClient") as MockClient:
+            mock_client = MockClient.return_value
+            # First login fails (init), second succeeds (reconnect)
+            mock_client.login.side_effect = [Exception("refused"), None]
+            handler = ImmuDBHandler(reconnect_interval=0.1)
+            self.assertFalse(handler.connected)
+            # Wait for reconnection attempt
+            time.sleep(0.3)
+            self.assertTrue(handler.connected)
+
+    def test_no_reconnect_before_interval(self):
+        with patch("immudb_handler.ImmudbClient") as MockClient:
+            mock_client = MockClient.return_value
+            mock_client.login.side_effect = [Exception("refused"), None]
+            handler = ImmuDBHandler(reconnect_interval=10)
+            self.assertFalse(handler.connected)
+            time.sleep(0.2)
+            # Should still be disconnected — interval hasn't elapsed
+            self.assertFalse(handler.connected)
+
+
 class TestClose(unittest.TestCase):
     def test_close_sets_running_false(self):
         handler, _ = make_handler()
