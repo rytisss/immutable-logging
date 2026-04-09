@@ -1,6 +1,9 @@
 import json
 import logging
+import os
 import queue
+import shutil
+import tempfile
 import time
 import unittest
 from io import StringIO
@@ -350,6 +353,44 @@ class TestPrintLog(unittest.TestCase):
         output = self._capture_print_log(entry)
         expected_ts = datetime.fromtimestamp(ts_ms / 1000).strftime("%Y-%m-%d %H:%M:%S")
         self.assertIn(expected_ts, output)
+
+
+class TestStartupVerification(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_startup_check_logs_info_on_clean(self):
+        from verify_logs import verify_log_integrity
+        # Create an empty log — should pass
+        log_path = os.path.join(self.tmpdir, "test.log")
+        integrity_path = log_path + ".integrity"
+        open(log_path, "w").close()
+        open(integrity_path, "w").close()
+        result = verify_log_integrity(log_path)
+        self.assertTrue(result.passed)
+
+    def test_startup_check_detects_tampered(self):
+        from verify_logs import verify_log_integrity
+        import hashlib
+
+        log_path = os.path.join(self.tmpdir, "test.log")
+        integrity_path = log_path + ".integrity"
+
+        with open(log_path, "w") as f:
+            f.write("tampered line\n")
+
+        genesis = "0" * 64
+        original_hash = hashlib.sha256(
+            ("original line" + genesis).encode()
+        ).hexdigest()
+        with open(integrity_path, "w") as f:
+            f.write(f"1|sha256={original_hash}|prev={genesis}\n")
+
+        result = verify_log_integrity(log_path)
+        self.assertFalse(result.passed)
 
 
 if __name__ == "__main__":
