@@ -1,14 +1,24 @@
+import sys
 from datetime import datetime
 import logging
 from logging.handlers import RotatingFileHandler
 from immudb_handler import ImmuDBHandler
+from integrity_handler import IntegrityHandler
+from verify_logs import verify_log_integrity
+
+LOG_FILE = "cvdlink.log"
 
 # Configure logger
 logger = logging.getLogger('CVDLINK test logger')
-logger.setLevel(logging.DEBUG)  # capture ALL levels
+logger.setLevel(logging.DEBUG)
+
+# Shared formatter for file handler and integrity handler
+file_formatter = logging.Formatter(
+    "%(asctime)s [%(levelname)s] %(name)s (%(filename)s:%(lineno)d): %(message)s"
+)
 
 # -------------------------
-# immudb handler (immutable logs)
+# immudb handler (immutable logs, best-effort)
 # -------------------------
 immu_handler = ImmuDBHandler()
 logger.addHandler(immu_handler)
@@ -17,16 +27,29 @@ logger.addHandler(immu_handler)
 # file handler (local logs)
 # -------------------------
 file_handler = RotatingFileHandler(
-    "cvdlink.log",
-    maxBytes=10_000_000,  # 10 MB per file
-    backupCount=5         # keep last 5 logs
+    LOG_FILE,
+    maxBytes=10_000_000,
+    backupCount=5
 )
 file_handler.setLevel(logging.DEBUG)
-file_formatter = logging.Formatter(
-    "%(asctime)s [%(levelname)s] %(name)s (%(filename)s:%(lineno)d): %(message)s"
-)
 file_handler.setFormatter(file_formatter)
 logger.addHandler(file_handler)
+
+# -------------------------
+# integrity handler (SHA-256 hash chain sidecar)
+# -------------------------
+integrity_handler = IntegrityHandler(LOG_FILE + ".integrity")
+integrity_handler.setLevel(logging.DEBUG)
+integrity_handler.setFormatter(file_formatter)
+logger.addHandler(integrity_handler)
+
+# -------------------------
+# console handler (stderr fallback)
+# -------------------------
+console_handler = logging.StreamHandler(sys.stderr)
+console_handler.setLevel(logging.DEBUG)
+console_handler.setFormatter(file_formatter)
+logger.addHandler(console_handler)
 
 
 def print_log(entry):
@@ -42,10 +65,20 @@ def print_log(entry):
         f"    Key:    {key}\n"
     )
 
-# -------------------------
-# application
-# -------------------------
+
 def main():
+    # Optional: verify existing log integrity on startup
+    result = verify_log_integrity(LOG_FILE)
+    if result.no_integrity_file:
+        logger.info("No previous integrity file found. Starting fresh.")
+    elif result.passed:
+        logger.info("Log integrity check passed.")
+    else:
+        logger.warning(
+            f"Log integrity check FAILED: {result.tampered} tampered, "
+            f"{result.missing} missing entries."
+        )
+
     # Write logs at all levels
     logger.debug("Debug details for developers")
     logger.info("Service started")
@@ -59,11 +92,13 @@ def main():
     except Exception:
         logger.exception("Unhandled exception occurred")
 
-    # Fetch logs from immudb
-    handler = logger.handlers[0]  # immudb handler
-    print("\n--- Latest immudb logs ---")
-    for log in handler.scan_logs(limit=6):
-        print_log(log)
+    # Fetch logs from immudb (only if connected)
+    if immu_handler.connected:
+        print("\n--- Latest immudb logs ---")
+        for log in immu_handler.scan_logs(limit=6):
+            print_log(log)
+    else:
+        print("\n--- immudb not available, logs written to file and console ---")
 
 if __name__ == "__main__":
     main()
