@@ -112,19 +112,30 @@ class ImmuDBHandler(logging.Handler):
     def _process_queue(self):
         """
         Background worker that writes logs to immudb.
-        Automatically retries if connection fails.
+        Periodically attempts to reconnect if disconnected.
         """
-        while True:
+        while self._running:
+            # If disconnected, try to reconnect at the configured interval
+            if not self.connected:
+                now = time.time()
+                if now - self._last_reconnect_attempt >= self.reconnect_interval:
+                    self._last_reconnect_attempt = now
+                    self._try_connect()
+                    if self.connected:
+                        import sys
+                        print("immudb connection re-established.", file=sys.stderr)
+                time.sleep(0.1)
+                continue
+
             try:
-                key, value = self.queue.get()
+                key, value = self.queue.get(timeout=0.1)
                 self.client.set(key, value)
+            except queue.Empty:
+                continue
             except Exception:
-                # Reconnect logic — immune to temporary outages
-                try:
-                    self.client = ImmudbClient()
-                    self.client.login("immudb", "immudb")
-                except Exception:
-                    time.sleep(0.5)  # wait before retrying
+                self.connected = False
+                # Set last attempt to 0 so reconnect is tried immediately
+                self._last_reconnect_attempt = 0
 
     def close(self):
         """
