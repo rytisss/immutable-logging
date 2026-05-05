@@ -210,19 +210,33 @@ Run the auditor as an independent container so a compromise of the application o
 
 ### Architecture
 
-```mermaid
-flowchart LR
-    App["Python app<br/>main.py + immudb_handler"]
-    DB[("immudb<br/>:3322 gRPC<br/>:8080 web console")]
-    Aud["Auditor<br/>immuclient audit-mode"]
-    Met["/metrics :9477<br/>(Prometheus)"]
-    Hook["Webhook<br/>(optional)"]
+The auditor runs **in its own container**, separate from immudb and from the application. That isolation is the point — if the immudb host (or its operator) is compromised, an auditor running elsewhere still notices and complains. All three containers talk over a shared Docker network (`immudb-net` in this project).
 
-    App -- "append log<br/>(SafeSet)" --> DB
-    Aud -- "fetch & verify state<br/>every audit-interval" --> DB
-    Aud --> Met
-    Aud -. "POST on tamper<br/>(audit-notification-url)" .-> Hook
+```mermaid
+flowchart TB
+    App["Python application<br/>(main.py + immudb_handler)"]
+
+    subgraph immudbBox["🐳 immudb container"]
+        DB["immudb engine<br/>gRPC :3322 · web console :8080"]
+    end
+
+    subgraph auditorBox["🐳 auditor container"]
+        Aud["audit loop<br/>(immuclient audit-mode)"]
+        Met["/metrics :9477<br/>(Prometheus)"]
+    end
+
+    Hook["external webhook (optional)"]
+
+    App -- "append log (SafeSet)" --> DB
+    Aud -- "fetch &amp; verify state" --> DB
+    Aud --- Met
+    Aud -. "POST on tamper" .-> Hook
+
+    classDef container fill:#0d1117,stroke:#30363d,color:#c9d1d9
+    class immudbBox,auditorBox container
 ```
+
+> Container images: `codenotary/immudb:latest` and `codenotary/immuclient:latest`. The Python application can run on the host or in its own container; the auditor only needs network reach to immudb.
 
 The auditor never writes to immudb — it only reads `currentState` and runs the Merkle consistency check between the previous and current root.
 
@@ -263,7 +277,7 @@ curl -s http://localhost:9477/metrics | grep immuclient_audit_
 
 ### Auditor in action
 
-The auditor performs an audit every minute (configurable via `IMMUCLIENT_AUDIT_INTERVAL`). After the first round it has nothing to compare, so it just records the state. From the second audit onward it verifies that the previous root is still consistent with the current root — that's the actual tamper check.
+The auditor performs an audit every minute (configurable via `IMMUCLIENT_AUDIT_INTERVAL`). It skips empty databases (`audit canceled: database is empty`) until something has been written. The first audit that actually runs just records the current state — it has nothing to compare against. From the next audit onward it asks immudb for a Merkle consistency proof between the previous root and the current root; that's the real tamper check, and it's what flags any rewrite of history.
 
 <p align="center">
   <img src="docs/images/auditor-terminal.png" alt="immudb auditor running in audit-mode, showing successful audits and live metrics" width="800" />
