@@ -157,32 +157,23 @@ python main.py
 
 The app now writes each log entry to immudb in addition to the file + integrity sidecar.
 
-### immudb log output
+### Inspecting log entries
 
-The demo script also dumps the latest entries from immudb at the end of its run:
+Logs are stored as **key-value pairs** in immudb — keys like `log:<timestamp>:<LEVEL>`, values are the JSON-encoded log record. The web console at `http://localhost:3080` is useful for admin tasks and infrastructure metrics, but it doesn't browse K/V data, so to see actual entries use `immuclient`:
 
-```text
---- Latest immudb logs ---
-[2026-03-31 11:05:55.026] DEBUG    Debug details for developers
-    Logger: CVDLINK test logger
-    File:   main.py:50
-    Func:   main
-    Key:    log:1774944355026:DEBUG
-
-[2026-03-31 11:05:55.027] CRITICAL System failure
-    Logger: CVDLINK test logger
-    File:   main.py:54
-    Func:   main
-    Key:    log:1774944355027:CRITICAL
+```bash
+docker run --rm --network immudb-net \
+  -e IMMUCLIENT_IMMUDB_ADDRESS=immudb \
+  -e IMMUCLIENT_USERNAME=immudb \
+  -e IMMUCLIENT_PASSWORD=immudb \
+  codenotary/immuclient scan log:
 ```
 
-### Web console
-
-immudb ships a web UI at `http://localhost:3080` (default credentials: `immudb` / `immudb`). Useful for browsing the database and watching infrastructure metrics.
-
 <p align="center">
-  <img src="docs/images/immudb-webconsole.png" alt="immudb web console dashboard" width="800" />
+  <img src="docs/images/immudb-cli-output.png" alt="immuclient scan output showing log entries with tx, key, and JSON value" width="800" />
 </p>
+
+Each entry has a transaction id (`tx`), the key, and the JSON-encoded log record as the value. Use `safeget <key>` instead of `scan` to retrieve a single entry along with its cryptographic inclusion proof. The demo script also dumps the latest entries at the end of its run via `immu_handler.scan_logs(limit=6)`.
 
 ### Graceful fallback
 
