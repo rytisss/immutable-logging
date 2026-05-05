@@ -16,7 +16,7 @@ This project demonstrates a **production-ready, immutable logging system** using
 - **Exception Logging**: Automatically captures exceptions and tracebacks.
 - **Dual Output**: Logs can be stored in immudb **and** written to a rotating file for easy inspection.
 - **Thread-Safe & Non-blocking**: Uses a queue and background worker to prevent application slowdowns.
-- **Docker-Ready**: Includes a Docker Compose setup for running immudb and your application together.
+- **Docker-Ready**: Runs immudb (and the auditor) as standard Docker containers on a shared network.
 - **Pretty-Printed Output**: Human-readable display of immudb log entries.
 - **Tamper-Proof File Logs**: SHA-256 hash chain written to a `.integrity` sidecar file detects modifications, deletions, and insertions.
 - **Graceful immudb Fallback**: Works without immudb — falls back to file + console logging, retries connection every 30 seconds.
@@ -56,14 +56,19 @@ This project demonstrates a **production-ready, immutable logging system** using
 
 ### Prerequisites
 
-- Docker & Docker Compose
+- Docker
 - Python 3.11+
 - pip
 
-### Run immudb with Docker and expose a few ports for the communication:  
+### Run immudb with Docker
+
+Create a shared network so the auditor (added later) can reach immudb by name, then start immudb with its gRPC and web console ports exposed:
 
 ```bash
-docker run -d -p 3322:3322 -p 8080:8080 -it --rm --name immudb codenotary/immudb:latest
+docker network create immudb-net
+docker run -d --network immudb-net --name immudb \
+  -p 3322:3322 -p 8080:8080 \
+  codenotary/immudb:latest
 ```
 
 ### Install requirements  
@@ -242,18 +247,18 @@ The auditor never writes to immudb — it only reads `currentState` and runs the
 
 ### Setup
 
-Start immudb and the auditor on a shared Docker network:
+If you already ran [Getting Started](#run-immudb-with-docker), immudb is on `immudb-net` — skip ahead to the auditor command. Otherwise create the network and immudb container first:
 
 ```bash
-# Shared network so the auditor can reach immudb by name
-docker network create immudb-net
-
-# 1. immudb (gRPC :3322, web console :8080)
+docker network create immudb-net   # skip if already created
 docker run -d --network immudb-net --name immudb \
   -p 3322:3322 -p 8080:8080 \
   codenotary/immudb:latest
+```
 
-# 2. Auditor (Prometheus metrics on :9477)
+Start the auditor on the same network (Prometheus metrics on `:9477`):
+
+```bash
 docker run -d --network immudb-net --name auditor \
   -p 9477:9477 \
   -e IMMUCLIENT_IMMUDB_ADDRESS=immudb \
@@ -263,8 +268,11 @@ docker run -d --network immudb-net --name auditor \
   -e IMMUCLIENT_AUDIT_MONITORING_HOST=0.0.0.0 \
   -e IMMUCLIENT_AUDIT_MONITORING_PORT=9477 \
   codenotary/immuclient:latest audit-mode
+```
 
-# 3. Generate some logs
+Generate some logs so the auditor has something to verify:
+
+```bash
 python main.py
 ```
 
