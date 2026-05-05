@@ -21,6 +21,7 @@ This project demonstrates a **production-ready, immutable logging system** using
 - **Tamper-Proof File Logs**: SHA-256 hash chain written to a `.integrity` sidecar file detects modifications, deletions, and insertions.
 - **Graceful immudb Fallback**: Works without immudb — falls back to file + console logging, retries connection every 30 seconds.
 - **Log Integrity Verification**: CLI tool and startup check to verify log file integrity.
+- **Tampering Detection (immudb Auditor)**: Independent `immuclient audit-mode` container periodically verifies immudb's cryptographic state and exposes Prometheus metrics.
 
 ---
 
@@ -201,5 +202,114 @@ The system works without immudb running. If immudb is unreachable:
 3. A background thread retries the connection every 30 seconds.
 4. When immudb becomes available, logging resumes to immudb automatically.
 
-## TODOs & resources worth reading:  
-[Tampering detection using **The Auditor**](https://docs.immudb.io/master/production/auditor.html#running-an-auditor-with-immuclient)
+## Tampering Detection with the immudb Auditor
+
+immudb's append-only writes are tamper-*evident*, but only if **someone checks**. The [immudb Auditor](https://docs.immudb.io/master/production/auditor.html) is a separate `immuclient audit-mode` process that periodically asks immudb for its current cryptographic state, compares it to the previous state, and verifies the Merkle proof linking them. If anyone — including a privileged operator — rewrites history in immudb's storage, the proof breaks and the auditor flags it.
+
+Run the auditor as an independent container so a compromise of the application or the immudb host does not silently compromise verification.
+
+### Architecture
+
+```mermaid
+flowchart LR
+    App["Python app<br/>main.py + immudb_handler"]
+    DB[("immudb<br/>:3322 gRPC<br/>:8080 web console")]
+    Aud["Auditor<br/>immuclient audit-mode"]
+    Met["/metrics :9477<br/>(Prometheus)"]
+    Hook["Webhook<br/>(optional)"]
+
+    App -- "append log<br/>(SafeSet)" --> DB
+    Aud -- "fetch & verify state<br/>every audit-interval" --> DB
+    Aud --> Met
+    Aud -. "POST on tamper<br/>(audit-notification-url)" .-> Hook
+```
+
+The auditor never writes to immudb — it only reads `currentState` and runs the Merkle consistency check between the previous and current root.
+
+### Setup
+
+Start immudb and the auditor on a shared Docker network:
+
+```bash
+# Shared network so the auditor can reach immudb by name
+docker network create immudb-net
+
+# 1. immudb (gRPC :3322, web console :8080)
+docker run -d --network immudb-net --name immudb \
+  -p 3322:3322 -p 8080:8080 \
+  codenotary/immudb:latest
+
+# 2. Auditor (Prometheus metrics on :9477)
+docker run -d --network immudb-net --name auditor \
+  -p 9477:9477 \
+  -e IMMUCLIENT_IMMUDB_ADDRESS=immudb \
+  -e IMMUCLIENT_IMMUDB_PORT=3322 \
+  -e IMMUCLIENT_AUDIT_USERNAME=immudb \
+  -e IMMUCLIENT_AUDIT_PASSWORD=immudb \
+  -e IMMUCLIENT_AUDIT_MONITORING_HOST=0.0.0.0 \
+  -e IMMUCLIENT_AUDIT_MONITORING_PORT=9477 \
+  codenotary/immuclient:latest audit-mode
+
+# 3. Generate some logs
+python main.py
+```
+
+Watch the auditor work:
+
+```bash
+docker logs -f auditor
+curl -s http://localhost:9477/metrics | grep immuclient_audit_
+```
+
+### Auditor in action
+
+The auditor performs an audit every minute (configurable via `IMMUCLIENT_AUDIT_INTERVAL`). After the first round it has nothing to compare, so it just records the state. From the second audit onward it verifies that the previous root is still consistent with the current root — that's the actual tamper check.
+
+<p align="center">
+  <img src="docs/images/auditor-terminal.png" alt="immudb auditor running in audit-mode, showing successful audits and live metrics" width="800" />
+</p>
+
+```text
+immuclientd INFO: audit #1 - auditing database defaultdb
+immuclientd WARNING: audit #1 canceled: database is empty on server ... @ immudb:3322
+immuclientd INFO: audit #2 finished in 107.97ms @ 2026-05-05T15:59:38Z
+immuclientd INFO: audit #3 result:
+ db: defaultdb, consistent: true previous state: 3e6ad3f99f2b2ea7b37c9ac3ef291d72a08184ee2868204cbcd899fd8bdcd8a9 at tx: 2
+  current state:           3e6ad3f99f2b2ea7b37c9ac3ef291d72a08184ee2868204cbcd899fd8bdcd8a9 at tx: 2
+immuclientd INFO: audit #3 finished in 111.02ms
+```
+
+### Key metrics
+
+The auditor exposes Prometheus metrics on `:9477/metrics`. The four to watch:
+
+| Metric | Meaning |
+| --- | --- |
+| `immuclient_audit_result_per_server` | **`1` = verified, `0` = tampered.** Alert on `== 0`. |
+| `immuclient_audit_run_at_per_server` | Unix timestamp of the last audit. Alert if it stops advancing — the auditor is dead. |
+| `immuclient_audit_curr_root_per_server` | Current Merkle root index (transaction id). |
+| `immuclient_audit_prev_root_per_server` | Merkle root from the previous audit. |
+
+```text
+immuclient_audit_result_per_server{server_address="immudb:3322",server_id="..."} 1
+immuclient_audit_run_at_per_server{server_address="immudb:3322",server_id="..."} 1.7779968983e+09
+immuclient_audit_curr_root_per_server{server_address="immudb:3322",server_id="..."} 2
+immuclient_audit_prev_root_per_server{server_address="immudb:3322",server_id="..."} 2
+```
+
+### immudb web console
+
+immudb ships a web UI at `http://localhost:8080` (login `immudb` / `immudb`). It's useful for browsing the database and watching infrastructure metrics, but the actual tamper check is the auditor's job.
+
+<p align="center">
+  <img src="docs/images/immudb-webconsole.png" alt="immudb web console dashboard" width="800" />
+</p>
+
+### Production hardening
+
+- **Run multiple auditors** in different zones — one auditor can itself be compromised; independent attestation needs independent observers.
+- **Set `IMMUCLIENT_AUDIT_NOTIFICATION_URL`** to a webhook you actually monitor. Without it, a tamper alert just sits in container logs.
+- **Use a read-only audit user** instead of the default `immudb` admin credentials.
+- **Alert on `immuclient_audit_result_per_server == 0`** *and* on `immuclient_audit_run_at_per_server` going stale — both failure modes matter.
+
+Reference: [immudb auditor docs](https://docs.immudb.io/master/production/auditor.html).
