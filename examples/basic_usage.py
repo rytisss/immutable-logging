@@ -2,9 +2,9 @@ import sys
 from datetime import datetime
 import logging
 from logging.handlers import RotatingFileHandler
-from immudb_handler import ImmuDBHandler
-from integrity_handler import IntegrityHandler
-from verify_logs import verify_log_integrity
+from immutable_logging.immudb import ImmuDBHandler
+from immutable_logging.integrity import IntegrityHandler
+from immutable_logging.verify import verify_log_integrity
 
 LOG_FILE = "cvdlink.log"
 

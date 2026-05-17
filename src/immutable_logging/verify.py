@@ -1,14 +1,12 @@
-import argparse
 import hashlib
 import os
-import sys
 from dataclasses import dataclass, field
 
 GENESIS_HASH = "0" * 64
 
 
 @dataclass
-class VerificationResult:
+class VerifyResult:
     passed: bool = True
     tampered: int = 0
     missing: int = 0
@@ -17,14 +15,23 @@ class VerificationResult:
     no_integrity_file: bool = False
     details: list = field(default_factory=list)
 
+    @property
+    def summary(self) -> str:
+        if self.no_integrity_file:
+            return "No previous integrity file found"
+        if self.passed:
+            count = len(self.details)
+            return f"OK: {count:,} entries verified"
+        return f"FAILED: {self.tampered:,} tampered, {self.missing:,} missing"
+
 
 def verify_log_integrity(log_path):
     """
     Verify a log file against its .integrity sidecar.
-    Returns a VerificationResult with details.
+    Returns a VerifyResult with details.
     """
     integrity_path = log_path + ".integrity"
-    result = VerificationResult()
+    result = VerifyResult()
 
     if not os.path.exists(integrity_path):
         result.passed = False
@@ -90,36 +97,3 @@ def verify_log_integrity(log_path):
         prev_hash = stored_hash
 
     return result
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Verify log file integrity")
-    parser.add_argument("log_file", help="Path to the log file to verify")
-    args = parser.parse_args()
-
-    if not os.path.exists(args.log_file):
-        print(f"Log file not found: {args.log_file}")
-        sys.exit(1)
-
-    print(f"Verifying {args.log_file}...")
-    result = verify_log_integrity(args.log_file)
-
-    for detail in result.details:
-        print(detail)
-
-    print()
-    if result.no_integrity_file:
-        print(f"No integrity file found for {args.log_file}. Cannot verify.")
-    elif result.passed:
-        print("Result: PASSED — all entries verified")
-    else:
-        print(
-            f"Result: FAILED — {result.tampered} tampered, "
-            f"{result.missing} missing entries"
-        )
-
-    sys.exit(0 if result.passed else 1)
-
-
-if __name__ == "__main__":
-    main()

@@ -4,7 +4,7 @@ import os
 import tempfile
 import unittest
 
-from integrity_handler import IntegrityHandler
+from immutable_logging.integrity import IntegrityHandler
 
 GENESIS_HASH = "0" * 64
 
