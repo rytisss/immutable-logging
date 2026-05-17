@@ -22,6 +22,28 @@ To also use the immudb handler, install with the `immudb` extra:
 pip install 'immutable_logging[immudb] @ git+https://github.com/rytisss/immutable-logging'
 ```
 
+### Install from a local clone
+
+If you already have the source checked out, install from the project root:
+
+```bash
+git clone https://github.com/rytisss/immutable-logging
+cd immutable-logging
+pip install .
+```
+
+With the `immudb` extra:
+
+```bash
+pip install '.[immudb]'
+```
+
+For development, use an editable install so code changes take effect without reinstalling:
+
+```bash
+pip install -e '.[immudb]'
+```
+
 After install, the public API is:
 
 ```python
