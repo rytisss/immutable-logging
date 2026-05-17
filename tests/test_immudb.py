@@ -316,7 +316,7 @@ class TestPrintLog(unittest.TestCase):
         # Import here to avoid triggering ImmuDBHandler at module level
         with patch("immutable_logging.immudb.ImmudbClient"):
             import importlib
-            import main as m
+            import examples.basic_usage as m
         captured = io.StringIO()
         sys.stdout = captured
         try:
