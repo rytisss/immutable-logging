@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "immutable_logging"
+description = "Immutable logging for Python: SHA-256 hash-chain integrity, with optional immudb backend."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Rytis" }]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Logging",
+]
+dependencies = []
+dynamic = ["version"]
+
+[project.optional-dependencies]
+immudb = ["immudb-py>=1.5,<2"]
+dev = ["pytest>=7", "build"]
+
+[project.scripts]
+verify-logs = "immutable_logging.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/rytisss/immutable-logging"
+
+[tool.setuptools.dynamic]
+version = { attr = "immutable_logging.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "immudb: marks tests that require a running immudb server (deselect with '-m \"not immudb\"')",
+]
