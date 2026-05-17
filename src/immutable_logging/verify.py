@@ -15,6 +15,15 @@ class VerifyResult:
     no_integrity_file: bool = False
     details: list = field(default_factory=list)
 
+    @property
+    def summary(self) -> str:
+        if self.no_integrity_file:
+            return "No previous integrity file found"
+        if self.passed:
+            count = len(self.details)
+            return f"OK: {count:,} entries verified"
+        return f"FAILED: {self.tampered:,} tampered, {self.missing:,} missing"
+
 
 def verify_log_integrity(log_path):
     """
