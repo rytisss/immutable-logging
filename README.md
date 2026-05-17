@@ -120,23 +120,19 @@ verify-logs cvdlink.log
 **Clean output:**
 
 ```text
-Verifying cvdlink.log...
-Line 1: OK
-Line 2: OK
-Line 3: OK
-
-Result: PASSED — all entries verified
+OK: 3 entries verified
 ```
 
 **Tampered output:**
 
 ```text
-Verifying cvdlink.log...
-Line 1: OK
-Line 2: TAMPERED
-Line 3: OK
+FAILED: 1 tampered, 0 missing
+```
 
-Result: FAILED — 1 tampered, 0 missing entries
+**Missing sidecar:**
+
+```text
+No previous integrity file found
 ```
 
 The application also runs this check automatically at startup and reports the result through the logger:
