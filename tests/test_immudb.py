@@ -10,12 +10,16 @@ from io import StringIO
 from unittest.mock import MagicMock, patch, call
 from datetime import datetime
 
-from immudb_handler import ImmuDBHandler
+import pytest
+
+from immutable_logging.immudb import ImmuDBHandler
+
+pytestmark = pytest.mark.immudb
 
 
 def make_handler(**kwargs):
     """Create an ImmuDBHandler with a mocked immudb client."""
-    with patch("immudb_handler.ImmudbClient") as MockClient:
+    with patch("immutable_logging.immudb.ImmudbClient") as MockClient:
         mock_client = MockClient.return_value
         handler = ImmuDBHandler(**kwargs)
         handler.client = mock_client
@@ -34,7 +38,7 @@ class TestImmuDBHandlerInit(unittest.TestCase):
         self.assertEqual(handler.prefix, "myapp")
 
     def test_login_called(self):
-        with patch("immudb_handler.ImmudbClient") as MockClient:
+        with patch("immutable_logging.immudb.ImmudbClient") as MockClient:
             mock_client = MockClient.return_value
             ImmuDBHandler(user="admin", password="secret")
             mock_client.login.assert_called_once_with("admin", "secret")
@@ -44,7 +48,7 @@ class TestImmuDBHandlerInit(unittest.TestCase):
         self.assertTrue(handler.connected)
 
     def test_connected_false_on_login_failure(self):
-        with patch("immudb_handler.ImmudbClient") as MockClient:
+        with patch("immutable_logging.immudb.ImmudbClient") as MockClient:
             mock_client = MockClient.return_value
             mock_client.login.side_effect = Exception("Connection refused")
             handler = ImmuDBHandler()
@@ -178,7 +182,7 @@ class TestProcessQueue(unittest.TestCase):
         mock_client.set.assert_called_once_with(key, value)
 
     def test_worker_reconnects_on_client_error(self):
-        with patch("immudb_handler.ImmudbClient") as MockClient:
+        with patch("immutable_logging.immudb.ImmudbClient") as MockClient:
             mock_client = MockClient.return_value
             # First set call raises, causing reconnect; second succeeds
             mock_client.set.side_effect = [Exception("conn lost"), None]
@@ -261,7 +265,7 @@ class TestScanLogs(unittest.TestCase):
 
 class TestReconnection(unittest.TestCase):
     def test_reconnects_after_interval(self):
-        with patch("immudb_handler.ImmudbClient") as MockClient:
+        with patch("immutable_logging.immudb.ImmudbClient") as MockClient:
             mock_client = MockClient.return_value
             # First login fails (init), second succeeds (reconnect)
             mock_client.login.side_effect = [Exception("refused"), None]
@@ -272,7 +276,7 @@ class TestReconnection(unittest.TestCase):
             self.assertTrue(handler.connected)
 
     def test_no_reconnect_before_interval(self):
-        with patch("immudb_handler.ImmudbClient") as MockClient:
+        with patch("immutable_logging.immudb.ImmudbClient") as MockClient:
             mock_client = MockClient.return_value
             mock_client.login.side_effect = [Exception("refused"), None]
             handler = ImmuDBHandler(reconnect_interval=10)
@@ -310,7 +314,7 @@ class TestPrintLog(unittest.TestCase):
     def _capture_print_log(self, entry):
         import io, sys
         # Import here to avoid triggering ImmuDBHandler at module level
-        with patch("immudb_handler.ImmudbClient"):
+        with patch("immutable_logging.immudb.ImmudbClient"):
             import importlib
             import main as m
         captured = io.StringIO()
@@ -363,7 +367,7 @@ class TestStartupVerification(unittest.TestCase):
         shutil.rmtree(self.tmpdir)
 
     def test_startup_check_logs_info_on_clean(self):
-        from verify_logs import verify_log_integrity
+        from immutable_logging.verify import verify_log_integrity
         # Create an empty log — should pass
         log_path = os.path.join(self.tmpdir, "test.log")
         integrity_path = log_path + ".integrity"
@@ -373,7 +377,7 @@ class TestStartupVerification(unittest.TestCase):
         self.assertTrue(result.passed)
 
     def test_startup_check_detects_tampered(self):
-        from verify_logs import verify_log_integrity
+        from immutable_logging.verify import verify_log_integrity
         import hashlib
 
         log_path = os.path.join(self.tmpdir, "test.log")
