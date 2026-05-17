@@ -8,6 +8,39 @@ This project demonstrates a **production-ready, immutable logging system** in Py
 
 ---
 
+## Installation
+
+Install the base package (hash-chain integrity, stdlib only):
+
+```bash
+pip install git+https://github.com/rytisss/immutable-logging
+```
+
+To also use the immudb handler, install with the `immudb` extra:
+
+```bash
+pip install 'immutable_logging[immudb] @ git+https://github.com/rytisss/immutable-logging'
+```
+
+After install, the public API is:
+
+```python
+from immutable_logging import (
+    IntegrityHandler,        # SHA-256 hash chain to a .integrity sidecar
+    ImmuDBHandler,           # immudb backend (needs [immudb] extra)
+    verify_log_integrity,    # programmatic verification
+    VerifyResult,            # result dataclass with .passed and .summary
+)
+```
+
+A CLI is also installed:
+
+```bash
+verify-logs path/to/app.log
+```
+
+---
+
 ## Two ways to use it
 
 | Mode | What you get | What you need |
@@ -16,7 +49,7 @@ This project demonstrates a **production-ready, immutable logging system** in Py
 | **B · With immudb** | Mode A *plus* every log written to immudb (append-only, cryptographically verifiable). | Mode A + an immudb container. |
 | **B+ · With auditor** | Mode B *plus* an independent process that periodically verifies immudb's cryptographic state. | Mode B + an auditor container. |
 
-The same `python main.py` works for all three — the immudb handler [falls back gracefully](#graceful-fallback) when no database is reachable, so you can start in Mode A and add immudb later without touching code.
+The same `python examples/basic_usage.py` works for all three — the immudb handler [falls back gracefully](#graceful-fallback) when no database is reachable, so you can start in Mode A and add immudb later without touching code.
 
 ## Features
 
@@ -47,16 +80,10 @@ The same `python main.py` works for all three — the immudb handler [falls back
 
 The simplest way to use it: file logs with a tamper-evident hash chain. No Docker, no database.
 
-### Install
-
-```bash
-pip install -r requirements.txt
-```
-
 ### Run
 
 ```bash
-python main.py
+python examples/basic_usage.py
 ```
 
 You'll get two files: `cvdlink.log` and `cvdlink.log.integrity`.
@@ -66,11 +93,11 @@ You'll get two files: `cvdlink.log` and `cvdlink.log.integrity`.
 `cvdlink.log` (rotating, human-readable):
 
 ```text
-2026-03-31 11:11:08,615 [DEBUG] CVDLINK test logger (main.py:50): Debug details for developers
-2026-03-31 11:11:08,616 [INFO] CVDLINK test logger (main.py:51): Service started
-2026-03-31 11:11:08,616 [WARNING] CVDLINK test logger (main.py:52): Memory usage near threshold
-2026-03-31 11:11:08,616 [ERROR] CVDLINK test logger (main.py:53): Database connection timeout
-2026-03-31 11:11:08,616 [CRITICAL] CVDLINK test logger (main.py:54): System failure
+2026-03-31 11:11:08,615 [DEBUG] CVDLINK test logger (basic_usage.py:50): Debug details for developers
+2026-03-31 11:11:08,616 [INFO] CVDLINK test logger (basic_usage.py:51): Service started
+2026-03-31 11:11:08,616 [WARNING] CVDLINK test logger (basic_usage.py:52): Memory usage near threshold
+2026-03-31 11:11:08,616 [ERROR] CVDLINK test logger (basic_usage.py:53): Database connection timeout
+2026-03-31 11:11:08,616 [CRITICAL] CVDLINK test logger (basic_usage.py:54): System failure
 ```
 
 `cvdlink.log.integrity` (hash chain, machine-readable):
@@ -87,7 +114,7 @@ Each entry's hash covers its full content (timestamp, level, logger, file, line,
 Run the CLI verifier:
 
 ```bash
-python verify_logs.py cvdlink.log
+verify-logs cvdlink.log
 ```
 
 **Clean output:**
@@ -152,7 +179,7 @@ docker run -d --network immudb-net --name immudb \
 Same command as in Mode A:
 
 ```bash
-python main.py
+python examples/basic_usage.py
 ```
 
 The app now writes each log entry to immudb in addition to the file + integrity sidecar.
@@ -198,7 +225,7 @@ The auditor runs **in its own container**, separate from immudb and from the app
 
 ```mermaid
 flowchart TB
-    App["Python application<br/>(main.py + immudb_handler)"]
+    App["Python application<br/>(examples/basic_usage.py + ImmuDBHandler)"]
 
     subgraph immudbBox["🐳 immudb container"]
         DB["immudb engine<br/>gRPC :3322 · web console :3080"]
@@ -306,7 +333,7 @@ Reference: [immudb auditor docs](https://docs.immudb.io/master/production/audito
 The test suite uses only the standard library (`unittest`) and mocks the immudb client, so **no running immudb instance is required**:
 
 ```bash
-python -m pytest test_immudb_handler.py test_integrity_handler.py test_verify_logs.py -v
+python -m pytest tests/ -v
 ```
 
 ## Benefits
