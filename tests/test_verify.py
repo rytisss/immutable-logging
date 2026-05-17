@@ -3,7 +3,7 @@ import os
 import tempfile
 import unittest
 
-from verify_logs import verify_log_integrity
+from immutable_logging.verify import verify_log_integrity
 
 GENESIS_HASH = "0" * 64
 
