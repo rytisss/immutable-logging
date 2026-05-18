@@ -273,6 +273,71 @@ class TestIntegrityRotatingFileHandler(unittest.TestCase):
         self.assertLessEqual(len(sidecars), 2,
                              msg=f"too many sidecars retained: {sidecars}")
 
+    def test_keep_all_backups_uses_timestamped_filenames(self):
+        """keep_all_backups=True must rename each rolled-over file to a unique
+        timestamped name so nothing is ever overwritten or deleted."""
+        formatter = SingleLineFormatter("%(message)s")
+        rot = IntegrityRotatingFileHandler(
+            self.log_path, maxBytes=200, backupCount=0, keep_all_backups=True,
+        )
+        rot.setFormatter(formatter)
+        logger = logging.getLogger(f"rot.keepall.{id(self)}")
+        logger.handlers.clear()
+        logger.setLevel(logging.DEBUG)
+        logger.addHandler(rot)
+
+        for i in range(200):
+            logger.info("x" * 60)
+        rot.close()
+
+        files = os.listdir(self.tmpdir)
+        # Active log + sidecar.
+        self.assertIn("app.log", files)
+        self.assertIn("app.log.integrity", files)
+
+        # Rotated logs use timestamp suffix (not numeric), and every rotated
+        # log has a matching sidecar with the same suffix.
+        rotated_logs = sorted(
+            f for f in files
+            if f.startswith("app.log.") and not f.endswith(".integrity") and f != "app.log"
+        )
+        rotated_sidecars = sorted(
+            f for f in files
+            if f.endswith(".integrity") and f != "app.log.integrity"
+        )
+        self.assertGreater(len(rotated_logs), 1,
+                           msg=f"expected multiple rotations; got {rotated_logs}")
+        self.assertEqual(len(rotated_logs), len(rotated_sidecars))
+        for log_name in rotated_logs:
+            suffix = log_name[len("app.log."):]
+            # ISO-style timestamp suffix should contain a 'T' separator.
+            self.assertIn("T", suffix, msg=f"non-timestamped name: {log_name}")
+            self.assertIn(log_name + ".integrity", rotated_sidecars)
+
+    def test_keep_all_backups_verifies_each_rotated_pair(self):
+        formatter = SingleLineFormatter("%(message)s")
+        rot = IntegrityRotatingFileHandler(
+            self.log_path, maxBytes=300, backupCount=0, keep_all_backups=True,
+        )
+        rot.setFormatter(formatter)
+        logger = logging.getLogger(f"rot.keepall2.{id(self)}")
+        logger.handlers.clear()
+        logger.setLevel(logging.DEBUG)
+        logger.addHandler(rot)
+
+        for i in range(100):
+            logger.info(f"entry {i:04d} " + "x" * 30)
+        rot.close()
+
+        log_files = [
+            os.path.join(self.tmpdir, f) for f in os.listdir(self.tmpdir)
+            if f.startswith("app.log") and not f.endswith(".integrity")
+        ]
+        self.assertGreater(len(log_files), 1)
+        for path in log_files:
+            result = verify_log_integrity(path)
+            self.assertTrue(result.passed, msg=f"{path}: {result.summary}")
+
 
 if __name__ == "__main__":
     unittest.main()

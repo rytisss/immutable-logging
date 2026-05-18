@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import os
+from datetime import datetime
 from logging.handlers import RotatingFileHandler
 
 GENESIS_HASH = "0" * 64
@@ -114,10 +115,20 @@ class IntegrityRotatingFileHandler(RotatingFileHandler):
       ``app.log.{backupCount}`` is deleted. The same cascade is applied to
       the ``.integrity`` sidecars. Peak disk usage is roughly
       ``(backupCount + 1) * maxBytes`` doubled for the sidecars.
+
+    Extra argument:
+
+    - ``keep_all_backups`` — when True, ignore ``backupCount`` and rename
+      each rolled-over file to a unique timestamped name
+      (``app.log.YYYYMMDDTHHMMSS-uuuuuu``) so no rotated log or sidecar is
+      ever deleted. Use this for audit/compliance workloads where the full
+      history must remain on disk (and you handle off-box archival
+      separately). Disk usage grows unbounded.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, keep_all_backups=False, **kwargs):
         super().__init__(*args, **kwargs)
+        self.keep_all_backups = keep_all_backups
         self._integrity_handler = IntegrityHandler(self.baseFilename + ".integrity")
 
     def setFormatter(self, formatter):
@@ -134,10 +145,43 @@ class IntegrityRotatingFileHandler(RotatingFileHandler):
             self.handleError(record)
 
     def doRollover(self):
-        super().doRollover()
-        if self.backupCount > 0:
-            self._rotate_integrity_sidecar()
+        if self.keep_all_backups:
+            self._do_timestamped_rollover()
+        else:
+            super().doRollover()
+            if self.backupCount > 0:
+                self._rotate_integrity_sidecar()
         self._integrity_handler.reset_chain()
+
+    def _do_timestamped_rollover(self):
+        """Rename the current .log and .integrity to unique timestamped names
+        so nothing is overwritten or deleted, then reopen a fresh active log.
+        The sidecar name mirrors {log_dest}.integrity so verify-logs can find it."""
+        if self.stream:
+            self.stream.close()
+            self.stream = None
+        suffix = self._unique_timestamp_suffix()
+        log_dest = f"{self.baseFilename}.{suffix}"
+        integrity_dest = f"{log_dest}.integrity"
+        if os.path.exists(self.baseFilename):
+            os.rename(self.baseFilename, log_dest)
+        current_integrity = self._integrity_handler.integrity_path
+        if os.path.exists(current_integrity):
+            os.rename(current_integrity, integrity_dest)
+        if not self.delay:
+            self.stream = self._open()
+
+    def _unique_timestamp_suffix(self):
+        """ISO-like timestamp with microsecond precision; appends -N on collision
+        (clock jitter, sub-microsecond rollover, or wall-clock going backward)."""
+        base = datetime.now().strftime("%Y%m%dT%H%M%S-%f")
+        candidate = base
+        counter = 0
+        while (os.path.exists(f"{self.baseFilename}.{candidate}")
+               or os.path.exists(f"{self.baseFilename}.{candidate}.integrity")):
+            counter += 1
+            candidate = f"{base}-{counter}"
+        return candidate
 
     def _rotate_integrity_sidecar(self):
         """Cascade {base}.N.integrity → {base}.N+1.integrity and
