@@ -103,6 +103,17 @@ class IntegrityRotatingFileHandler(RotatingFileHandler):
     Use this instead of attaching a separate IntegrityHandler to the logger
     when rotation is involved: one handler writes both files for the same
     record, which keeps the chain aligned across rollover boundaries.
+
+    Constructor arguments are inherited from
+    :class:`logging.handlers.RotatingFileHandler`. The two that matter most:
+
+    - ``maxBytes`` — rotate when the active log would exceed this size in
+      bytes. Set to 0 to disable size-based rotation.
+    - ``backupCount`` — how many rotated files to retain. On each rollover
+      ``app.log -> app.log.1``, ``.1 -> .2``, ..., and anything beyond
+      ``app.log.{backupCount}`` is deleted. The same cascade is applied to
+      the ``.integrity`` sidecars. Peak disk usage is roughly
+      ``(backupCount + 1) * maxBytes`` doubled for the sidecars.
     """
 
     def __init__(self, *args, **kwargs):

@@ -21,9 +21,31 @@ from immutable_logging import (
     verify_log_integrity,
 )
 
+# --- Demo parameters --------------------------------------------------------
+# These are inherited from logging.handlers.RotatingFileHandler (which
+# IntegrityRotatingFileHandler subclasses). The defaults below are tuned to
+# trigger rotation many times in a small demo; production values are usually
+# much larger.
+#
+#   ENTRIES       — how many log records this script writes.
+#
+#   MAX_BYTES     — maxBytes: rotate when the active log file would exceed
+#                   this size in bytes after appending the next record. Set
+#                   to 0 to disable size-based rotation. Bigger value = fewer
+#                   rotations and longer chains per file; smaller value =
+#                   more, smaller files.
+#
+#   BACKUP_COUNT  — backupCount: how many rotated files to keep around. On
+#                   each rollover, app.log -> app.log.1, .1 -> .2, ..., and
+#                   anything beyond app.log.{backupCount} is deleted. The
+#                   same cascade applies to the .integrity sidecars. Set
+#                   backupCount=0 to disable rotation entirely. Pick a
+#                   value that bounds disk usage (peak = backupCount + 1
+#                   files of up to maxBytes each, doubled when counting
+#                   sidecars).
 ENTRIES = 10_000
-MAX_BYTES = 64 * 1024  # 64 KB -> ~5-10 rollovers at this entry size
-BACKUP_COUNT = 50      # keep enough backups to hold every rotation
+MAX_BYTES = 64 * 1024  # 64 KB — small so we rotate ~14 times in this demo
+BACKUP_COUNT = 50      # keep all rotations for the demo; tune down in prod
 
 
 def _section(title):
@@ -35,6 +57,13 @@ def main():
     log_path = os.path.join(tmpdir, "stress.log")
 
     try:
+        _section("Parameters")
+        print(f"  ENTRIES       = {ENTRIES:,}   (log records written)")
+        print(f"  MAX_BYTES     = {MAX_BYTES:,} bytes "
+              f"  (rotate when the active log would exceed this size)")
+        print(f"  BACKUP_COUNT  = {BACKUP_COUNT}     "
+              f"  (keep up to this many rotated .log + .integrity backups)")
+
         _section(f"Writing {ENTRIES:,} entries with maxBytes={MAX_BYTES}")
 
         logger = logging.getLogger("rotation-demo")
