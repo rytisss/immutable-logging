@@ -3,7 +3,7 @@ from datetime import datetime
 import logging
 from logging.handlers import RotatingFileHandler
 from immutable_logging.immudb import ImmuDBHandler
-from immutable_logging.integrity import IntegrityHandler
+from immutable_logging.integrity import IntegrityHandler, SingleLineFormatter
 from immutable_logging.verify import verify_log_integrity
 
 LOG_FILE = "cvdlink.log"
@@ -26,8 +26,10 @@ class IntegrityAwareRotatingHandler(RotatingFileHandler):
 logger = logging.getLogger('CVDLINK test logger')
 logger.setLevel(logging.DEBUG)
 
-# Shared formatter for file handler and integrity handler
-file_formatter = logging.Formatter(
+# Shared formatter for file handler and integrity handler.
+# SingleLineFormatter escapes newlines so multi-line records (e.g. exception
+# tracebacks) stay on one log line — required for hash-chain verification.
+file_formatter = SingleLineFormatter(
     "%(asctime)s [%(levelname)s] %(name)s (%(filename)s:%(lineno)d): %(message)s"
 )
 

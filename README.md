@@ -49,11 +49,14 @@ After install, the public API is:
 ```python
 from immutable_logging import (
     IntegrityHandler,        # SHA-256 hash chain to a .integrity sidecar
+    SingleLineFormatter,     # escapes newlines so one record == one log line
     ImmuDBHandler,           # immudb backend (needs [immudb] extra)
     verify_log_integrity,    # programmatic verification
     VerifyResult,            # result dataclass with .passed and .summary
 )
 ```
+
+> **Always pair `IntegrityHandler` with `SingleLineFormatter`** (applied to *both* the integrity handler and the file handler). The verifier reads the log file one line per entry, so a multi-line record — like an exception traceback — would otherwise break the chain. `SingleLineFormatter` escapes `\n`/`\r`/`\\` so each record stays on one line.
 
 A CLI is also installed:
 
@@ -109,6 +112,8 @@ python examples/basic_usage.py
 ```
 
 You'll get two files: `cvdlink.log` and `cvdlink.log.integrity`.
+
+For the absolute simplest setup — no rotation, no immudb — see [`examples/minimal_usage.py`](examples/minimal_usage.py).
 
 ### What gets written
 

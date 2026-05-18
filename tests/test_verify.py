@@ -1,8 +1,11 @@
 import hashlib
+import logging
 import os
 import tempfile
 import unittest
+from logging.handlers import RotatingFileHandler
 
+from immutable_logging.integrity import IntegrityHandler, SingleLineFormatter
 from immutable_logging.verify import verify_log_integrity
 
 GENESIS_HASH = "0" * 64
@@ -105,6 +108,85 @@ class TestVerifyLogIntegrity(unittest.TestCase):
             f.writelines(lines)
         result = verify_log_integrity(log_path)
         self.assertFalse(result.passed)
+
+
+def _run_session(log_path, messages, exception_at=None):
+    """Mimic one process run of the basic example: file handler + integrity handler
+    sharing a SingleLineFormatter, writing `messages` and optionally raising an exception."""
+    logger = logging.getLogger(f"test.{log_path}.{id(messages)}")
+    logger.handlers.clear()
+    logger.setLevel(logging.DEBUG)
+
+    formatter = SingleLineFormatter(
+        "%(asctime)s [%(levelname)s] %(name)s (%(filename)s:%(lineno)d): %(message)s"
+    )
+    integrity = IntegrityHandler(log_path + ".integrity")
+    integrity.setFormatter(formatter)
+    file_handler = RotatingFileHandler(log_path, maxBytes=10_000_000, backupCount=5)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(integrity)
+    logger.addHandler(file_handler)
+
+    for i, msg in enumerate(messages):
+        if exception_at is not None and i == exception_at:
+            try:
+                1 / 0
+            except ZeroDivisionError:
+                logger.exception(msg)
+        else:
+            logger.info(msg)
+
+    integrity.close()
+    file_handler.close()
+
+
+class TestEndToEnd(unittest.TestCase):
+    """Regression tests for the two bugs that broke `python examples/basic_usage.py`
+    on the second run: multi-line exception records and chain restart on process
+    start. Both must verify cleanly without anyone tampering with the files."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.log_path = os.path.join(self.tmpdir, "session.log")
+
+    def tearDown(self):
+        for f in os.listdir(self.tmpdir):
+            os.remove(os.path.join(self.tmpdir, f))
+        os.rmdir(self.tmpdir)
+
+    def test_single_run_with_exception_verifies(self):
+        _run_session(self.log_path, ["start", "boom", "end"], exception_at=1)
+        result = verify_log_integrity(self.log_path)
+        self.assertTrue(result.passed, msg=result.summary)
+        self.assertEqual(result.tampered, 0)
+        self.assertEqual(result.missing, 0)
+
+    def test_two_sequential_runs_verify(self):
+        _run_session(self.log_path, ["run1 a", "run1 b"])
+        _run_session(self.log_path, ["run2 a", "run2 b"])
+        result = verify_log_integrity(self.log_path)
+        self.assertTrue(result.passed, msg=result.summary)
+        self.assertEqual(result.tampered, 0)
+        self.assertEqual(result.missing, 0)
+
+    def test_two_runs_with_exceptions_verify(self):
+        """The exact failure mode the user reported: re-running basic_usage.py
+        flagged the previous run's exception traceback as tampering."""
+        _run_session(self.log_path, ["start", "boom", "end"], exception_at=1)
+        _run_session(self.log_path, ["start", "boom", "end"], exception_at=1)
+        result = verify_log_integrity(self.log_path)
+        self.assertTrue(result.passed, msg=result.summary)
+
+    def test_real_tamper_still_detected_after_fix(self):
+        _run_session(self.log_path, ["start", "boom", "end"], exception_at=1)
+        with open(self.log_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        lines[0] = lines[0].replace("start", "HACKED")
+        with open(self.log_path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+        result = verify_log_integrity(self.log_path)
+        self.assertFalse(result.passed)
+        self.assertGreaterEqual(result.tampered, 1)
 
 
 if __name__ == "__main__":
