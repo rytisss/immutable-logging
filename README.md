@@ -48,13 +48,19 @@ After install, the public API is:
 
 ```python
 from immutable_logging import (
-    IntegrityHandler,        # SHA-256 hash chain to a .integrity sidecar
-    SingleLineFormatter,     # escapes newlines so one record == one log line
-    ImmuDBHandler,           # immudb backend (needs [immudb] extra)
-    verify_log_integrity,    # programmatic verification
-    VerifyResult,            # result dataclass with .passed and .summary
+    IntegrityHandler,                # SHA-256 hash chain to a .integrity sidecar
+    IntegrityRotatingFileHandler,    # rotating file handler with built-in chain
+    SingleLineFormatter,             # escapes newlines so one record == one log line
+    ImmuDBHandler,                   # immudb backend (needs [immudb] extra)
+    verify_log_integrity,            # programmatic verification
+    VerifyResult,                    # result dataclass with .passed and .summary
 )
 ```
+
+Pick the right file handler:
+
+- **No rotation** — use `IntegrityHandler` alongside your own `FileHandler` (see [`examples/minimal_usage.py`](examples/minimal_usage.py)).
+- **With rotation** — use `IntegrityRotatingFileHandler` on its own; it writes the log and the `.integrity` sidecar together and rotates both in lockstep so each rotated pair (`app.log.N` + `app.log.N.integrity`) verifies independently (see [`examples/basic_usage.py`](examples/basic_usage.py) and the stress demo at [`examples/rotation_usage.py`](examples/rotation_usage.py)).
 
 > **Always pair `IntegrityHandler` with `SingleLineFormatter`** (applied to *both* the integrity handler and the file handler). The verifier reads the log file one line per entry, so a multi-line record — like an exception traceback — would otherwise break the chain. `SingleLineFormatter` escapes `\n`/`\r`/`\\` so each record stays on one line.
 

@@ -1,32 +1,20 @@
 import sys
 from datetime import datetime
 import logging
-from logging.handlers import RotatingFileHandler
 from immutable_logging.immudb import ImmuDBHandler
-from immutable_logging.integrity import IntegrityHandler, SingleLineFormatter
+from immutable_logging.integrity import (
+    IntegrityRotatingFileHandler,
+    SingleLineFormatter,
+)
 from immutable_logging.verify import verify_log_integrity
 
 LOG_FILE = "cvdlink.log"
-
-
-class IntegrityAwareRotatingHandler(RotatingFileHandler):
-    """RotatingFileHandler that resets the integrity hash chain on rotation."""
-
-    def __init__(self, *args, integrity_handler=None, **kwargs):
-        self._integrity_handler = integrity_handler
-        super().__init__(*args, **kwargs)
-
-    def doRollover(self):
-        super().doRollover()
-        if self._integrity_handler:
-            self._integrity_handler.reset_chain()
 
 
 # Configure logger
 logger = logging.getLogger('CVDLINK test logger')
 logger.setLevel(logging.DEBUG)
 
-# Shared formatter for file handler and integrity handler.
 # SingleLineFormatter escapes newlines so multi-line records (e.g. exception
 # tracebacks) stay on one log line — required for hash-chain verification.
 file_formatter = SingleLineFormatter(
@@ -40,21 +28,13 @@ immu_handler = ImmuDBHandler()
 logger.addHandler(immu_handler)
 
 # -------------------------
-# integrity handler (SHA-256 hash chain sidecar)
+# rotating file handler with integrated hash chain.
+# Writes cvdlink.log + cvdlink.log.integrity, rotating both in lockstep.
 # -------------------------
-integrity_handler = IntegrityHandler(LOG_FILE + ".integrity")
-integrity_handler.setLevel(logging.DEBUG)
-integrity_handler.setFormatter(file_formatter)
-logger.addHandler(integrity_handler)
-
-# -------------------------
-# file handler (local logs, resets integrity chain on rotation)
-# -------------------------
-file_handler = IntegrityAwareRotatingHandler(
+file_handler = IntegrityRotatingFileHandler(
     LOG_FILE,
     maxBytes=10_000_000,
     backupCount=5,
-    integrity_handler=integrity_handler,
 )
 file_handler.setLevel(logging.DEBUG)
 file_handler.setFormatter(file_formatter)

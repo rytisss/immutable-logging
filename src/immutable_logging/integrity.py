@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import os
+from logging.handlers import RotatingFileHandler
 
 GENESIS_HASH = "0" * 64
 
@@ -89,4 +90,62 @@ class IntegrityHandler(logging.Handler):
         self._line_num = 0
 
     def close(self):
+        super().close()
+
+
+class IntegrityRotatingFileHandler(RotatingFileHandler):
+    """RotatingFileHandler that also writes a SHA-256 hash-chain sidecar
+    next to the log file. The sidecar lives at ``{log_path}.integrity`` and
+    rotates in lockstep with the log, so each rotated pair (e.g. ``app.log.1``
+    and ``app.log.1.integrity``) verifies independently via
+    ``verify_log_integrity()`` or ``verify-logs``.
+
+    Use this instead of attaching a separate IntegrityHandler to the logger
+    when rotation is involved: one handler writes both files for the same
+    record, which keeps the chain aligned across rollover boundaries.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._integrity_handler = IntegrityHandler(self.baseFilename + ".integrity")
+
+    def setFormatter(self, formatter):
+        super().setFormatter(formatter)
+        self._integrity_handler.setFormatter(formatter)
+
+    def emit(self, record):
+        try:
+            if self.shouldRollover(record):
+                self.doRollover()
+            logging.FileHandler.emit(self, record)
+            self._integrity_handler.emit(record)
+        except Exception:
+            self.handleError(record)
+
+    def doRollover(self):
+        super().doRollover()
+        if self.backupCount > 0:
+            self._rotate_integrity_sidecar()
+        self._integrity_handler.reset_chain()
+
+    def _rotate_integrity_sidecar(self):
+        """Cascade {base}.N.integrity → {base}.N+1.integrity and
+        {base}.integrity → {base}.1.integrity, mirroring the parent's .log cascade."""
+        base = self.baseFilename
+        for i in range(self.backupCount - 1, 0, -1):
+            sfn = f"{base}.{i}.integrity"
+            dfn = f"{base}.{i + 1}.integrity"
+            if os.path.exists(sfn):
+                if os.path.exists(dfn):
+                    os.remove(dfn)
+                os.rename(sfn, dfn)
+        dfn = f"{base}.1.integrity"
+        if os.path.exists(dfn):
+            os.remove(dfn)
+        current = self._integrity_handler.integrity_path
+        if os.path.exists(current):
+            os.rename(current, dfn)
+
+    def close(self):
+        self._integrity_handler.close()
         super().close()

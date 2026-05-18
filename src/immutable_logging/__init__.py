@@ -1,12 +1,17 @@
 """Immutable logging primitives: SHA-256 hash-chain integrity + optional immudb backend."""
 
-from immutable_logging.integrity import IntegrityHandler, SingleLineFormatter
+from immutable_logging.integrity import (
+    IntegrityHandler,
+    IntegrityRotatingFileHandler,
+    SingleLineFormatter,
+)
 from immutable_logging.verify import VerifyResult, verify_log_integrity
 
 __version__ = "0.1.0"
 
 __all__ = [
     "IntegrityHandler",
+    "IntegrityRotatingFileHandler",
     "ImmuDBHandler",
     "SingleLineFormatter",
     "VerifyResult",
