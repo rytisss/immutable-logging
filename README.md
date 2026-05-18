@@ -153,8 +153,14 @@ OK: 3 entries verified
 **Tampered output:**
 
 ```text
-FAILED: 1 tampered, 0 missing
+FAILED: 2 tampered, 1 missing
+  Tampered lines: 3, 6
+  Missing lines:  7
 ```
+
+The exit code is `0` on pass, `1` on FAILED, and `2` if the log file is missing — usable directly in CI / cron / startup checks.
+
+For programmatic use, call `verify_log_integrity()` and inspect the `VerifyResult` fields (`passed`, `summary`, `tampered_lines`, `missing_lines`). A runnable end-to-end demo is at [`examples/verify_usage.py`](examples/verify_usage.py).
 
 **Missing sidecar:**
 
