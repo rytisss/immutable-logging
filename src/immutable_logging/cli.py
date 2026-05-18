@@ -6,6 +6,17 @@ import sys
 
 from immutable_logging.verify import verify_log_integrity
 
+# Cap per-category line lists so a fully-mangled log doesn't flood the terminal.
+MAX_LINES_SHOWN = 20
+
+
+def _format_lines(lines):
+    """Render a list of 1-based line numbers, truncating with '...' past the cap."""
+    if len(lines) <= MAX_LINES_SHOWN:
+        return ", ".join(str(n) for n in lines)
+    head = ", ".join(str(n) for n in lines[:MAX_LINES_SHOWN])
+    return f"{head}, ... ({len(lines) - MAX_LINES_SHOWN} more)"
+
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
@@ -21,6 +32,11 @@ def main(argv=None):
 
     result = verify_log_integrity(args.log_file)
     print(result.summary)
+    if not result.passed:
+        if result.tampered_lines:
+            print(f"  Tampered lines: {_format_lines(result.tampered_lines)}")
+        if result.missing_lines:
+            print(f"  Missing lines:  {_format_lines(result.missing_lines)}")
     return 0 if result.passed else 1
 
 
