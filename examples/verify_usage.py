@@ -80,17 +80,19 @@ def main():
 
         with open(log_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
-        lines[1] = "tampered content\n"
+        for idx in (1, 4, 6, 8):  # tamper a spread of lines (2, 5, 7, 9)
+            lines[idx] = f"tampered content #{idx + 1}\n"
         with open(log_path, "w", encoding="utf-8") as f:
             f.writelines(lines)
-        _report("2. Tampered line 2", verify_log_integrity(log_path))
+        _report("2. Tampered lines 2, 5, 7, 9", verify_log_integrity(log_path))
 
         with open(log_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
-        del lines[-1]
+        for idx in sorted((2, 5, 10), reverse=True):  # delete from the end so indices stay valid
+            del lines[idx]
         with open(log_path, "w", encoding="utf-8") as f:
             f.writelines(lines)
-        _report("3. Tampered + deleted last line", verify_log_integrity(log_path))
+        _report("3. Same tampering + 3 deleted lines", verify_log_integrity(log_path))
     finally:
         for f in os.listdir(tmpdir):
             os.remove(os.path.join(tmpdir, f))
