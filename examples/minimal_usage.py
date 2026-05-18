@@ -49,15 +49,16 @@ def main():
     else:
         logger.warning(f"Log integrity check FAILED: {result.summary}")
 
+    logger.debug("Debug details for developers")
     logger.info("Service started")
     logger.warning("Memory usage near threshold")
+    logger.error("Database connection timeout")
+    logger.critical("System failure")
 
     try:
         1 / 0
-    except ZeroDivisionError:
+    except Exception:
         logger.exception("Unhandled exception occurred")
-
-    logger.info("Service stopped")
 
 
 if __name__ == "__main__":
