@@ -85,19 +85,29 @@ def main():
             all_passed = all_passed and result.passed
         print(f"  -> overall: {'all pairs verified' if all_passed else 'verification BROKEN'}")
 
-        _section("Tampering with the active log (mid-file edit)")
-        with open(log_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-        target = len(lines) // 2
-        original = lines[target].rstrip()
-        lines[target] = "MITM injected this line\n"
-        with open(log_path, "w", encoding="utf-8") as f:
-            f.writelines(lines)
-        print(f"  replaced line {target + 1} of {os.path.basename(log_path)}")
-        print(f"    before: {original[:90]}...")
-        print(f"    after : MITM injected this line")
+        _section("Tampering with multiple log files")
+        # Pick the active log and two rotated backups to tamper. Each file
+        # has its own .integrity sidecar, so each must detect its own tamper
+        # independently.
+        rotated_backups = [n for n in log_files if n != "stress.log"]
+        targets = [
+            ("stress.log",            "active log, mid-file"),
+            (rotated_backups[2],      "recent rotated backup"),
+            (rotated_backups[-1],     "oldest rotated backup"),
+        ]
+        tampered_at = {}
+        for name, description in targets:
+            path = os.path.join(tmpdir, name)
+            with open(path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+            line_idx = len(lines) // 2
+            tampered_at[name] = line_idx + 1
+            lines[line_idx] = "MITM injected this line\n"
+            with open(path, "w", encoding="utf-8") as f:
+                f.writelines(lines)
+            print(f"  edited {name:<24} line {line_idx + 1}  ({description})")
 
-        _section("Re-verifying — tamper is pinpointed, rotated logs unaffected")
+        _section("Re-verifying — each tampered file reports its own line, others stay clean")
         for name in log_files:
             path = os.path.join(tmpdir, name)
             result = verify_log_integrity(path)
@@ -110,9 +120,10 @@ def main():
             print(f"  {status} {name:<24} {result.summary}{extra}")
 
         print()
-        print("Takeaway: rotation moves both the log and its sidecar in lockstep,")
-        print("so a tamper in the active log doesn't poison verification of")
-        print("rotated backups — and the verifier reports the exact line.")
+        print("Takeaway: rotation moves the log and its .integrity sidecar")
+        print("in lockstep, so each rotated pair is verifiable on its own.")
+        print("Tampering in one file is pinpointed to its line number without")
+        print("affecting verification of the other rotated backups.")
     finally:
         for f in os.listdir(tmpdir):
             os.remove(os.path.join(tmpdir, f))
