@@ -1,15 +1,10 @@
 """Demonstrate the verify_log_integrity API end-to-end.
 
-Runs three checks against a temporary log:
-  1. Clean      — newly written, hashes match.
-  2. Tampered   — one line edited in place.
-  3. Missing    — one line deleted.
+Walks through three scenarios against a temporary log, printing the
+VerifyResult after each so you can see exactly what the verifier reports.
+Useful as a template for monitoring / CI / startup checks in your own code.
 
-Each check pretty-prints the VerifyResult so you can see what fields are
-available for use in your own monitoring / CI / startup checks.
-
-For one-shot use from the shell, the `verify-logs` CLI prints the same
-information in one line per call.
+For one-shot use from the shell, see the `verify-logs` CLI.
 """
 
 import logging
@@ -24,7 +19,7 @@ from immutable_logging import (
 
 
 def _write_log(log_path):
-    """Write a small log + matching integrity sidecar."""
+    """Write a realistic-looking log + matching integrity sidecar."""
     logger = logging.getLogger("verify-demo")
     logger.handlers.clear()
     logger.setLevel(logging.DEBUG)
@@ -58,16 +53,37 @@ def _write_log(log_path):
     file_handler.close()
 
 
-def _report(label, result):
-    print(f"\n=== {label} ===")
-    print(f"summary:        {result.summary}")
-    print(f"passed:         {result.passed}")
-    print(f"tampered count: {result.tampered}")
-    print(f"missing count:  {result.missing}")
-    if result.tampered_lines:
-        print(f"tampered lines: {result.tampered_lines}")
-    if result.missing_lines:
-        print(f"missing lines:  {result.missing_lines}")
+def _section(title, description):
+    bar = "=" * 72
+    print(f"\n{bar}\n {title}\n{bar}")
+    print(description.strip())
+
+
+def _report(result, show_details=False):
+    print()
+    print(f"  result.summary        = {result.summary!r}")
+    print(f"  result.passed         = {result.passed}")
+    print(f"  result.tampered       = {result.tampered}")
+    print(f"  result.missing        = {result.missing}")
+    print(f"  result.tampered_lines = {result.tampered_lines}")
+    print(f"  result.missing_lines  = {result.missing_lines}")
+    if show_details and result.details:
+        print("  result.details:")
+        for line in result.details:
+            print(f"    - {line}")
+
+
+def _show_log(log_path, highlight=None):
+    """Print the log file with line numbers; highlight any 1-based indices given."""
+    highlight = set(highlight or ())
+    with open(log_path, "r", encoding="utf-8") as f:
+        lines = f.read().splitlines()
+    print()
+    print("  current log file contents:")
+    for i, line in enumerate(lines, 1):
+        marker = "  >>" if i in highlight else "    "
+        snippet = (line[:90] + "...") if len(line) > 90 else line
+        print(f"  {marker}{i:>3}: {snippet}")
 
 
 def main():
@@ -75,24 +91,66 @@ def main():
     log_path = os.path.join(tmpdir, "demo.log")
 
     try:
+        # --- Scenario 1 -------------------------------------------------
+        _section(
+            "Scenario 1 — Clean log",
+            """
+The log and its .integrity sidecar were just written together, so every
+hash in the chain matches. verify_log_integrity() should report passed=True
+and zero tampered / missing entries.
+            """,
+        )
         _write_log(log_path)
-        _report("1. Clean log", verify_log_integrity(log_path))
+        _show_log(log_path)
+        _report(verify_log_integrity(log_path))
 
+        # --- Scenario 2 -------------------------------------------------
+        _section(
+            "Scenario 2 — In-place edits",
+            """
+Below we overwrite lines 2, 5, 7, and 9 in the .log file (the .integrity
+sidecar is untouched, which is the realistic attack model — an intruder
+who can edit logs but not the chain). The verifier recomputes each line's
+hash and compares against the sidecar; mismatches are flagged as tampered.
+The exact line numbers come back in result.tampered_lines.
+            """,
+        )
+        tampered_targets = (2, 5, 7, 9)
         with open(log_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
-        for idx in (1, 4, 6, 8):  # tamper a spread of lines (2, 5, 7, 9)
-            lines[idx] = f"tampered content #{idx + 1}\n"
+        for line_no in tampered_targets:
+            lines[line_no - 1] = f"tampered content #{line_no}\n"
         with open(log_path, "w", encoding="utf-8") as f:
             f.writelines(lines)
-        _report("2. Tampered lines 2, 5, 7, 9", verify_log_integrity(log_path))
+        _show_log(log_path, highlight=tampered_targets)
+        _report(verify_log_integrity(log_path))
 
+        # --- Scenario 3 -------------------------------------------------
+        _section(
+            "Scenario 3 — Deletions cause a positional cascade",
+            """
+Now we also delete three lines (originally 3, 6, and 11). The verifier
+compares positionally: log line N is checked against integrity entry N.
+Once a line is removed, every subsequent log line shifts up by one, so
+the lines that used to be 'clean' now hash against the wrong integrity
+entry and get flagged as tampered too. Entries past the new end of the
+log are reported as missing. Watch how tampered_lines now spans a
+contiguous range and missing_lines points at the tail.
+            """,
+        )
+        deletion_targets = (3, 6, 11)
         with open(log_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
-        for idx in sorted((2, 5, 10), reverse=True):  # delete from the end so indices stay valid
-            del lines[idx]
+        for line_no in sorted(deletion_targets, reverse=True):
+            del lines[line_no - 1]
         with open(log_path, "w", encoding="utf-8") as f:
             f.writelines(lines)
-        _report("3. Same tampering + 3 deleted lines", verify_log_integrity(log_path))
+        _show_log(log_path)
+        _report(verify_log_integrity(log_path), show_details=True)
+
+        print()
+        print("Done. In production, branch on result.passed and route the")
+        print("tampered/missing line lists to your alerting / on-call channel.")
     finally:
         for f in os.listdir(tmpdir):
             os.remove(os.path.join(tmpdir, f))
