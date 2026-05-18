@@ -40,8 +40,18 @@ def _write_log(log_path):
     logger.addHandler(file_handler)
 
     logger.info("Service started")
-    logger.warning("Memory usage near threshold")
-    logger.error("Database connection timeout")
+    logger.debug("Loaded configuration from /etc/app/config.yaml")
+    logger.info("Listening on 0.0.0.0:8080")
+    logger.debug("Accepted connection from 10.0.0.42")
+    logger.info("User alice authenticated successfully")
+    logger.warning("Memory usage near threshold (87%)")
+    logger.error("Database connection timeout after 30s")
+    logger.info("Retrying database connection (attempt 2/3)")
+    try:
+        1 / 0
+    except ZeroDivisionError:
+        logger.exception("Unhandled exception while processing request")
+    logger.critical("System failure: shutting down")
     logger.info("Service stopped")
 
     integrity.close()
