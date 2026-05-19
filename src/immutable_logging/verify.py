@@ -1,3 +1,6 @@
+__author__ = "Rytis Augustauskas"
+__email__ = "rytis.here@gmail.com"
+
 import hashlib
 import os
 from dataclasses import dataclass, field

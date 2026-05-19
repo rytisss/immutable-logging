@@ -35,6 +35,9 @@ The script is also runnable repeatedly: each invocation verifies the
 existing chain at startup, then appends new entries to it.
 """
 
+__author__ = "Rytis Augustauskas"
+__email__ = "rytis.here@gmail.com"
+
 import sys
 from datetime import datetime
 import logging

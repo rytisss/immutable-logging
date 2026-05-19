@@ -26,6 +26,9 @@ the last entry from the sidecar on startup so the chain is continuous across
 process restarts.
 """
 
+__author__ = "Rytis Augustauskas"
+__email__ = "rytis.here@gmail.com"
+
 import logging
 import sys
 

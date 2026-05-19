@@ -1,5 +1,8 @@
 """Console-script entry point for `verify-logs`."""
 
+__author__ = "Rytis Augustauskas"
+__email__ = "rytis.here@gmail.com"
+
 import argparse
 import os
 import sys
