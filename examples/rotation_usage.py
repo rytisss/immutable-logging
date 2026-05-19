@@ -25,6 +25,9 @@ Run from the repo root:
     python examples/rotation_usage.py
 """
 
+__author__ = "Rytis Augustauskas"
+__email__ = "rytis.here@gmail.com"
+
 import os
 import logging
 import tempfile

@@ -1,3 +1,6 @@
+__author__ = "Rytis Augustauskas"
+__email__ = "rytis.here@gmail.com"
+
 import subprocess
 import sys
 import logging

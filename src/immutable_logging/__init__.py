@@ -1,5 +1,8 @@
 """Immutable logging primitives: SHA-256 hash-chain integrity + optional immudb backend."""
 
+__author__ = "Rytis Augustauskas"
+__email__ = "rytis.here@gmail.com"
+
 from immutable_logging.integrity import (
     IntegrityHandler,
     IntegrityRotatingFileHandler,

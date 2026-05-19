@@ -7,6 +7,9 @@ Useful as a template for monitoring / CI / startup checks in your own code.
 For one-shot use from the shell, see the `verify-logs` CLI.
 """
 
+__author__ = "Rytis Augustauskas"
+__email__ = "rytis.here@gmail.com"
+
 import logging
 import os
 import tempfile
