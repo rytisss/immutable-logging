@@ -10,7 +10,7 @@ from immutable_logging.integrity import (
 )
 from immutable_logging.verify import VerifyResult, verify_log_integrity
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 __all__ = [
     "IntegrityHandler",
