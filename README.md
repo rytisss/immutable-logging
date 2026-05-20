@@ -246,7 +246,7 @@ docker run --rm --network immudb-net \
 ```
 
 <p align="center">
-  <img src="docs/images/immudb-cli-output.png" alt="immuclient scan output showing log entries with tx, key, and JSON value" width="800" />
+  <img src="https://raw.githubusercontent.com/rytisss/immutable-logging/main/docs/images/immudb-cli-output.png" alt="immuclient scan output showing log entries with tx, key, and JSON value" width="800" />
 </p>
 
 Each entry has a transaction id (`tx`), the key, and the JSON-encoded log record as the value. Use `safeget <key>` instead of `scan` to retrieve a single entry along with its cryptographic inclusion proof. The demo script also dumps the latest entries at the end of its run via `immu_handler.scan_logs(limit=6)`.
@@ -273,7 +273,7 @@ immudb's writes are tamper-*evident*, but only if **someone checks**. The [immud
 The auditor runs **in its own container**, separate from immudb and from the application. That isolation is the point — if the immudb host (or its operator) is compromised, an auditor running elsewhere still notices and complains. All three components share the same Docker network (`immudb-net`).
 
 <p align="center">
-  <img src="docs/images/auditor-architecture.png" alt="Auditor architecture: Python app writes to immudb container via SafeSet; separate auditor container fetches and verifies state, exposes Prometheus metrics, and posts to an optional external webhook on tamper" width="800" />
+  <img src="https://raw.githubusercontent.com/rytisss/immutable-logging/main/docs/images/auditor-architecture.png" alt="Auditor architecture: Python app writes to immudb container via SafeSet; separate auditor container fetches and verifies state, exposes Prometheus metrics, and posts to an optional external webhook on tamper" width="800" />
 </p>
 
 > Container images: `codenotary/immudb:latest` and `codenotary/immuclient:latest`. The Python application can run on the host or in its own container; the auditor only needs network reach to immudb.
@@ -308,7 +308,7 @@ curl -s http://localhost:3477/metrics | grep immuclient_audit_
 The auditor performs an audit every minute (configurable via `IMMUCLIENT_AUDIT_INTERVAL`). It skips empty databases (`audit canceled: database is empty`) until something has been written. The first audit that actually runs just records the current state — there's nothing to compare against. From the next audit onward it asks immudb for a Merkle consistency proof between the previous root and the current root; that's the real tamper check, and it's what flags any rewrite of history.
 
 <p align="center">
-  <img src="docs/images/auditor-terminal.png" alt="immudb auditor running in audit-mode, showing successful audits and live metrics" width="800" />
+  <img src="https://raw.githubusercontent.com/rytisss/immutable-logging/main/docs/images/auditor-terminal.png" alt="immudb auditor running in audit-mode, showing successful audits and live metrics" width="800" />
 </p>
 
 ```text
