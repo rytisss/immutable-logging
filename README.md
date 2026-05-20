@@ -10,13 +10,27 @@ This project demonstrates a **production-ready, immutable logging system** in Py
 
 ## Installation
 
-Install the base package (hash-chain integrity, stdlib only):
+Install from [PyPI](https://pypi.org/project/immutable-logging/) (hash-chain integrity, stdlib only):
+
+```bash
+pip install immutable_logging
+```
+
+To also use the immudb handler, install with the `immudb` extra:
+
+```bash
+pip install 'immutable_logging[immudb]'
+```
+
+### Install the latest from source
+
+To pick up changes that haven't been released to PyPI yet, install straight from the repository:
 
 ```bash
 pip install git+https://github.com/rytisss/immutable-logging
 ```
 
-To also use the immudb handler, install with the `immudb` extra:
+With the `immudb` extra:
 
 ```bash
 pip install 'immutable_logging[immudb] @ git+https://github.com/rytisss/immutable-logging'
@@ -258,29 +272,9 @@ immudb's writes are tamper-*evident*, but only if **someone checks**. The [immud
 
 The auditor runs **in its own container**, separate from immudb and from the application. That isolation is the point — if the immudb host (or its operator) is compromised, an auditor running elsewhere still notices and complains. All three components share the same Docker network (`immudb-net`).
 
-```mermaid
-flowchart TB
-    App["Python application<br/>(examples/basic_usage.py + ImmuDBHandler)"]
-
-    subgraph immudbBox["🐳 immudb container"]
-        DB["immudb engine<br/>gRPC :3322 · web console :3080"]
-    end
-
-    subgraph auditorBox["🐳 auditor container"]
-        Aud["audit loop<br/>(immuclient audit-mode)"]
-        Met["/metrics :3477<br/>(Prometheus)"]
-    end
-
-    Hook["external webhook (optional)"]
-
-    App -- "append log (SafeSet)" --> DB
-    Aud -- "fetch &amp; verify state" --> DB
-    Aud --- Met
-    Aud -. "POST on tamper" .-> Hook
-
-    classDef container fill:#0d1117,stroke:#30363d,color:#c9d1d9
-    class immudbBox,auditorBox container
-```
+<p align="center">
+  <img src="docs/images/auditor-architecture.png" alt="Auditor architecture: Python app writes to immudb container via SafeSet; separate auditor container fetches and verifies state, exposes Prometheus metrics, and posts to an optional external webhook on tamper" width="800" />
+</p>
 
 > Container images: `codenotary/immudb:latest` and `codenotary/immuclient:latest`. The Python application can run on the host or in its own container; the auditor only needs network reach to immudb.
 
@@ -381,5 +375,5 @@ python -m pytest tests/ -v
 ## Acknowledgement  
 This research was supported by the [CVDLINK](https://cvdlink-project.eu/) project (EU Horizon grant agreement N°101137278)
 <div align="center">
-<img src="https://github.com/rytisss/immutable-logging/blob/feature/readme_setup/res/CVDLINK_logo-v.png" width="450"/>
+<img src="https://raw.githubusercontent.com/rytisss/immutable-logging/main/res/CVDLINK_logo-v.png" width="450"/>
 </div>
