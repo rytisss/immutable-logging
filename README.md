@@ -378,7 +378,7 @@ python -m pytest tests/ -v
 - **Compliance** — suitable for systems with strict data-integrity requirements.
 - **Flexibility** — start in Mode A, promote to Mode B / B+ without code changes.
 
-## Aknowledgement  
+## Acknowledgement  
 This research was supported by the [CVDLINK](https://cvdlink-project.eu/) project (EU Horizon grant agreement N°101137278)
 <div align="center">
 <img src="https://github.com/rytisss/immutable-logging/blob/feature/readme_setup/res/CVDLINK_logo-v.png" width="450"/>
